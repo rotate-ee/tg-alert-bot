@@ -1,0 +1,13 @@
+# Секреты - никогда не коммитить
+.env
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# ОС/редакторы
+.DS_Store
+.idea/
+.vscode/
