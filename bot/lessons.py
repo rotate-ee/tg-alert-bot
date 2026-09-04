@@ -4,7 +4,7 @@
 уроков, отменённых учителями (см. cancellations.py).
 """
 import json
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -85,7 +85,60 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
     return _build_day_lessons(day_entries, schedule["bells"], group, cancelled)
 
 
-def get_lesson_by_number(number: int, d: date) -> dict | None:
+def get_lessons_for_date(d: date) -> list[dict]:
+    """Список уроков на конкретную дату (с учётом чергування тижнів і скасувань)."""
+    now = datetime.combine(d, time(12, 0), tzinfo=KYIV_TZ)
+    return get_today_lessons(now)
+
+
+_DAY_NAMES = {
+    0: "Понеділок",
+    1: "Вівторок",
+    2: "Середа",
+    3: "Четвер",
+    4: "П'ятниця",
+    5: "Субота",
+    6: "Неділя",
+}
+
+
+def format_week_message(now: datetime | None = None) -> str:
+    """
+    Формирует красиво оформлений розклад на весь поточний тиждень
+    (понеділок-п'ятниця; вихідні пропускаються, якщо уроків немає).
+    """
+    if now is None:
+        now = datetime.now(KYIV_TZ)
+
+    monday = now.date() - timedelta(days=now.weekday())
+
+    blocks = []
+    for offset in range(7):
+        d = monday + timedelta(days=offset)
+        lessons = get_lessons_for_date(d)
+        if not lessons:
+            continue
+
+        day_name = _DAY_NAMES[d.weekday()]
+        is_today = d == now.date()
+        header = f"📌 {day_name}, {d.strftime('%d.%m')}" + (" (сьогодні)" if is_today else "")
+
+        lines = [header, "─" * 22]
+        for lesson in lessons:
+            time_part = (
+                f"{lesson['start']}–{lesson['end']}" if not lesson["remote"] else "дистанційно"
+            )
+            status = " ❌" if lesson["cancelled"] else ""
+            lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{status}")
+
+        blocks.append("\n".join(lines))
+
+    title = f"🗓 Розклад на тиждень ({monday.strftime('%d.%m')}–{(monday + timedelta(days=4)).strftime('%d.%m')})"
+
+    if not blocks:
+        return f"{title}\n\nУроків на цьому тижні немає."
+
+    return title + "\n\n" + "\n\n".join(blocks)
     """Найти урок с данным номером на конкретную дату (для команд /cancel, /uncancel)."""
     now = datetime.combine(d, time(12, 0), tzinfo=KYIV_TZ)
     for lesson in get_today_lessons(now):

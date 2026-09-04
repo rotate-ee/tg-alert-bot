@@ -18,7 +18,12 @@ from aiogram.types import Message
 import cancellations
 import config
 from alerts import AlertWatcher
-from lessons import format_day_schedule_message, format_status_message, get_lesson_by_number
+from lessons import (
+    format_day_schedule_message,
+    format_status_message,
+    format_week_message,
+    get_lesson_by_number,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("main")
@@ -37,6 +42,12 @@ async def cmd_now(message: Message):
     await message.answer(text)
 
 
+@dp.message(Command("week"))
+async def cmd_week(message: Message):
+    text = format_week_message()
+    await message.answer(text)
+
+
 @dp.message(Command("start", "help"))
 async def cmd_help(message: Message):
     text = (
@@ -44,7 +55,8 @@ async def cmd_help(message: Message):
         f"«{config.REGION_TITLE}» і після відбою пишу сюди, "
         "який зараз урок.\n\n"
         "Команди:\n"
-        "/now — показати поточний/наступний урок прямо зараз"
+        "/now — показати поточний/наступний урок прямо зараз\n"
+        "/week — розклад на весь тиждень"
     )
     if message.chat.type == "private" and message.from_user.id in config.ADMIN_IDS:
         text += (
