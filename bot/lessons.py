@@ -1,12 +1,14 @@
 """
 Работа с расписанием: загрузка schedule.json, определение "группы недель"
-(1,2-й тиждень місяця / 3,4-й) и поиск текущего / следующего урока.
+(1,2-й тиждень місяця / 3,4-й), поиск текущего/следующего урока и учёт
+уроков, отменённых учителями (см. cancellations.py).
 """
 import json
-from datetime import datetime, time
+from datetime import date, datetime, time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import cancellations
 import config
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
@@ -48,11 +50,11 @@ def _resolve_entry(entry, group: str) -> str | None:
     return entry.get(group)
 
 
-def _build_day_lessons(day_entries: list, bells: dict, group: str) -> list[dict]:
+def _build_day_lessons(day_entries: list, bells: dict, group: str, cancelled: set[int]) -> list[dict]:
     """
     Разворачивает список предметов дня в список уроков с временем
-    (для 1-6 урока) либо пометкой "дистанційно" (для 7-го и далее,
-    т.к. в розкладі дзвінків для них нет фиксированного времени).
+    (для 1-6 урока), пометкой "дистанційно" (для 7-го и далее) и
+    пометкой "cancelled" для уроков, отменённых учителями.
     """
     lessons = []
     for idx, entry in enumerate(day_entries):
@@ -62,22 +64,14 @@ def _build_day_lessons(day_entries: list, bells: dict, group: str) -> list[dict]
             continue  # в эту группу недель этого урока просто нет
 
         bell = bells.get(number)
-        if bell:
-            lessons.append({
-                "number": number,
-                "name": name,
-                "start": bell["start"],
-                "end": bell["end"],
-                "remote": False,
-            })
-        else:
-            lessons.append({
-                "number": number,
-                "name": name,
-                "start": None,
-                "end": None,
-                "remote": True,
-            })
+        lessons.append({
+            "number": number,
+            "name": name,
+            "start": bell["start"] if bell else None,
+            "end": bell["end"] if bell else None,
+            "remote": bell is None,
+            "cancelled": number in cancelled,
+        })
     return lessons
 
 
@@ -87,14 +81,24 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
     schedule = load_schedule()
     group = week_group(now)
     day_entries = schedule["days"].get(now.weekday(), [])
-    return _build_day_lessons(day_entries, schedule["bells"], group)
+    cancelled = cancellations.get_cancelled_numbers(now.date())
+    return _build_day_lessons(day_entries, schedule["bells"], group, cancelled)
+
+
+def get_lesson_by_number(number: int, d: date) -> dict | None:
+    """Найти урок с данным номером на конкретную дату (для команд /cancel, /uncancel)."""
+    now = datetime.combine(d, time(12, 0), tzinfo=KYIV_TZ)
+    for lesson in get_today_lessons(now):
+        if lesson["number"] == number:
+            return lesson
+    return None
 
 
 def find_current_and_next(now: datetime | None = None):
     """
-    Возвращает (текущий_урок, следующий_урок, список_дистанційних_уроків)
-    на момент `now`. Дистанційні уроки (без часу) не участвуют в
-    поиске "текущий/следующий" - для них нет привязки к часам.
+    Возвращает (текущий_урок, следующий_урок, дистанційні_сьогодні,
+    скасовані_сьогодні) на момент `now`. Дистанційні уроки (без часу)
+    и скасовані уроки не участвуют в поиске "текущий/следующий".
     """
     if now is None:
         now = datetime.now(KYIV_TZ)
@@ -105,8 +109,12 @@ def find_current_and_next(now: datetime | None = None):
     current = None
     upcoming = None
     remote_today = []
+    cancelled_today = []
 
     for lesson in today_lessons:
+        if lesson["cancelled"]:
+            cancelled_today.append(lesson)
+            continue
         if lesson["remote"]:
             remote_today.append(lesson)
             continue
@@ -117,16 +125,16 @@ def find_current_and_next(now: datetime | None = None):
         elif start > now_t and upcoming is None:
             upcoming = lesson
 
-    return current, upcoming, remote_today
+    return current, upcoming, remote_today, cancelled_today
 
 
 def format_status_message(prefix: str, now: datetime | None = None) -> str:
     """
     Формирует итоговый текст сообщения (например, об отбое тревоги)
     с указанием текущего/следующего урока и, если есть, дистанційних
-    уроків сьогодні.
+    та скасованих уроків сьогодні.
     """
-    current, upcoming, remote_today = find_current_and_next(now)
+    current, upcoming, remote_today, cancelled_today = find_current_and_next(now)
 
     if current:
         body = (
@@ -144,5 +152,9 @@ def format_status_message(prefix: str, now: datetime | None = None) -> str:
     if remote_today:
         names = ", ".join(f"{l['number']}-й «{l['name']}»" for l in remote_today)
         body += f"\n\n(Дистанційно сьогодні також: {names})"
+
+    if cancelled_today:
+        names = ", ".join(f"{l['number']}-й «{l['name']}»" for l in cancelled_today)
+        body += f"\n\n(Скасовано сьогодні: {names})"
 
     return f"{prefix}\n\n{body}"

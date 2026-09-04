@@ -36,3 +36,11 @@ NOTIFY_ON_START = os.getenv("NOTIFY_ON_START", "true").lower() == "true"
 #   "3_4"  - всегда считать, что сейчас 3-й или 4-й тиждень місяця
 # Если авторасчёт не совпадает с реальным журналом школы - задайте вручную.
 WEEK_GROUP_OVERRIDE = os.getenv("WEEK_GROUP_OVERRIDE", "auto")
+
+# Telegram user_id тех, кому разрешено отмечать уроки отменёнными
+# (команды /cancel, /uncancel, /cancelled - работают только в ЛС с ботом).
+# Несколько ID через запятую: ADMIN_IDS=111111111,222222222
+# Узнать свой user_id можно у @userinfobot.
+ADMIN_IDS = {
+    int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()
+}
