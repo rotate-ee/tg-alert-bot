@@ -7,7 +7,7 @@ Telegram-бот: знает расписание уроков класса и п
 """
 import asyncio
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -18,7 +18,7 @@ from aiogram.types import Message
 import cancellations
 import config
 from alerts import AlertWatcher
-from lessons import format_status_message, get_lesson_by_number
+from lessons import format_day_schedule_message, format_status_message, get_lesson_by_number
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("main")
@@ -156,6 +156,42 @@ async def cmd_cancelled(message: Message):
     await message.answer(f"Скасовано на {target_date.isoformat()}:\n" + "\n".join(lines))
 
 
+# ---------- фоновая задача: ранкова розсилка розкладу ----------
+
+def _parse_digest_time() -> tuple[int, int] | None:
+    raw = config.MORNING_DIGEST_TIME
+    if not raw or raw.lower() == "off":
+        return None
+    try:
+        h, m = map(int, raw.split(":"))
+        return h, m
+    except ValueError:
+        log.warning("Некоректний MORNING_DIGEST_TIME=%r, розсилку вимкнено", raw)
+        return None
+
+
+async def morning_digest():
+    parsed = _parse_digest_time()
+    if parsed is None:
+        log.info("Ранкова розсилка вимкнена (MORNING_DIGEST_TIME=%r)", config.MORNING_DIGEST_TIME)
+        return
+
+    hour, minute = parsed
+    while True:
+        now = datetime.now(KYIV_TZ)
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        await asyncio.sleep((target - now).total_seconds())
+
+        text = format_day_schedule_message("📅 Розклад на сьогодні")
+        if text is not None:
+            log.info("Відправляю ранковий розклад")
+            await bot.send_message(config.CHAT_ID, text)
+        else:
+            log.info("Сьогодні уроків немає (вихідний) - ранкову розсилку пропускаю")
+
+
 # ---------- фоновая задача: опрос статуса тревоги ----------
 
 async def watch_alerts():
@@ -182,6 +218,7 @@ async def watch_alerts():
 
 async def main():
     asyncio.create_task(watch_alerts())
+    asyncio.create_task(morning_digest())
     log.info("Бот запущен, слежу за регионом: %s", config.REGION_TITLE)
     await dp.start_polling(bot)
 

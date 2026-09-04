@@ -158,3 +158,27 @@ def format_status_message(prefix: str, now: datetime | None = None) -> str:
         body += f"\n\n(Скасовано сьогодні: {names})"
 
     return f"{prefix}\n\n{body}"
+
+
+def format_day_schedule_message(prefix: str, now: datetime | None = None) -> str | None:
+    """
+    Формирует список всех уроков на сьогодні (для ранкової розсилки).
+    Возвращает None, если на сьогодні уроків немає взагалі (вихідний) -
+    тоді розсилку можна не відправляти, щоб не спамити в вихідні.
+    """
+    if now is None:
+        now = datetime.now(KYIV_TZ)
+
+    today_lessons = get_today_lessons(now)
+    if not today_lessons:
+        return None
+
+    lines = []
+    for lesson in today_lessons:
+        time_part = (
+            f"{lesson['start']}–{lesson['end']}" if not lesson["remote"] else "дистанційно"
+        )
+        status = " (скасовано)" if lesson["cancelled"] else ""
+        lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{status}")
+
+    return f"{prefix}\n\n" + "\n".join(lines)

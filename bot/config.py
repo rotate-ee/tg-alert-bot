@@ -44,3 +44,7 @@ WEEK_GROUP_OVERRIDE = os.getenv("WEEK_GROUP_OVERRIDE", "auto")
 ADMIN_IDS = {
     int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()
 }
+
+# Во сколько (за часом Europe/Kyiv, формат ЧЧ:ММ) присылать в чат
+# повний розклад на сьогодні. Порожньо або "off" - вимкнути розсилку.
+MORNING_DIGEST_TIME = os.getenv("MORNING_DIGEST_TIME", "10:00").strip()
