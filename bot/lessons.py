@@ -91,6 +91,14 @@ def get_lessons_for_date(d: date) -> list[dict]:
     return get_today_lessons(now)
 
 
+def get_lesson_by_number(number: int, d: date) -> dict | None:
+    """Найти урок с данным номером на конкретную дату (для команд /cancel, /uncancel)."""
+    for lesson in get_lessons_for_date(d):
+        if lesson["number"] == number:
+            return lesson
+    return None
+
+
 _DAY_NAMES = {
     0: "Понеділок",
     1: "Вівторок",
