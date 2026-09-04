@@ -1,13 +1,21 @@
 """
 Хранение отменённых учителями уроков: JSON-файл вида
 {"2026-09-07": [3, 5]} - номера уроков, отменённых на конкретную дату.
+
+Путь к файлу можно задать переменной окружения DATA_DIR (например,
+примонтированный Railway Volume вроде /data) - иначе используется
+локальная папка bot/data рядом с кодом. Без постоянного диска на
+Railway этот файл пропадает при каждом передеплое/рестарте контейнера.
 """
 import json
+import os
 from datetime import date
 from pathlib import Path
 
-DATA_PATH = Path(__file__).parent / "data" / "cancellations.json"
-DATA_PATH.parent.mkdir(exist_ok=True)
+_data_dir = os.getenv("DATA_DIR")
+DATA_DIR = Path(_data_dir) if _data_dir else Path(__file__).parent / "data"
+DATA_PATH = DATA_DIR / "cancellations.json"
+DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def _load() -> dict:
