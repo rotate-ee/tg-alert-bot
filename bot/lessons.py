@@ -20,12 +20,21 @@ def load_schedule() -> dict:
         data = json.load(f)
     bells = {int(k): v for k, v in data["bells"].items()}
     days = {int(k): v for k, v in data["days"].items()}
-    return {"bells": bells, "days": days}
+    remote_numbers = set(data.get("remote_lesson_numbers", []))
+    return {"bells": bells, "days": days, "remote_numbers": remote_numbers}
 
 
 def _parse_time(value: str) -> time:
     h, m = map(int, value.split(":"))
     return time(hour=h, minute=m)
+
+
+def _format_lesson_time(lesson: dict) -> str:
+    """«11:00–11:45», «11:00–11:45 (дистанційно)» або просто «дистанційно» (якщо часу немає)."""
+    if lesson["start"] is None:
+        return "дистанційно"
+    base = f"{lesson['start']}–{lesson['end']}"
+    return f"{base} (дистанційно)" if lesson["remote"] else base
 
 
 def week_group(now: datetime) -> str:
@@ -50,11 +59,13 @@ def _resolve_entry(entry, group: str) -> str | None:
     return entry.get(group)
 
 
-def _build_day_lessons(day_entries: list, bells: dict, group: str, cancelled: set[int]) -> list[dict]:
+def _build_day_lessons(
+    day_entries: list, bells: dict, group: str, cancelled: set[int], remote_numbers: set[int]
+) -> list[dict]:
     """
-    Разворачивает список предметов дня в список уроков с временем
-    (для 1-6 урока), пометкой "дистанційно" (для 7-го и далее) и
-    пометкой "cancelled" для уроков, отменённых учителями.
+    Разворачивает список предметов дня в список уроков с временем,
+    пометкой "remote" (дистанційно - незалежно від наявності часу
+    дзвінка) и пометкой "cancelled" для уроків, скасованих учителями.
     """
     lessons = []
     for idx, entry in enumerate(day_entries):
@@ -69,7 +80,7 @@ def _build_day_lessons(day_entries: list, bells: dict, group: str, cancelled: se
             "name": name,
             "start": bell["start"] if bell else None,
             "end": bell["end"] if bell else None,
-            "remote": bell is None,
+            "remote": bell is None or number in remote_numbers,
             "cancelled": number in cancelled,
         })
     return lessons
@@ -82,7 +93,9 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
     group = week_group(now)
     day_entries = schedule["days"].get(now.weekday(), [])
     cancelled = cancellations.get_cancelled_numbers(now.date())
-    return _build_day_lessons(day_entries, schedule["bells"], group, cancelled)
+    return _build_day_lessons(
+        day_entries, schedule["bells"], group, cancelled, schedule["remote_numbers"]
+    )
 
 
 def get_lessons_for_date(d: date) -> list[dict]:
@@ -133,9 +146,7 @@ def format_week_message(now: datetime | None = None) -> str:
 
         lines = [header, "─" * 22]
         for lesson in lessons:
-            time_part = (
-                f"{lesson['start']}–{lesson['end']}" if not lesson["remote"] else "дистанційно"
-            )
+            time_part = _format_lesson_time(lesson)
             status = " ❌" if lesson["cancelled"] else ""
             lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{status}")
 
@@ -147,12 +158,6 @@ def format_week_message(now: datetime | None = None) -> str:
         return f"{title}\n\nУроків на цьому тижні немає."
 
     return title + "\n\n" + "\n\n".join(blocks)
-    """Найти урок с данным номером на конкретную дату (для команд /cancel, /uncancel)."""
-    now = datetime.combine(d, time(12, 0), tzinfo=KYIV_TZ)
-    for lesson in get_today_lessons(now):
-        if lesson["number"] == number:
-            return lesson
-    return None
 
 
 def find_current_and_next(now: datetime | None = None):
@@ -169,15 +174,16 @@ def find_current_and_next(now: datetime | None = None):
 
     current = None
     upcoming = None
-    remote_today = []
+    remote_no_time_today = []
     cancelled_today = []
 
     for lesson in today_lessons:
         if lesson["cancelled"]:
             cancelled_today.append(lesson)
             continue
-        if lesson["remote"]:
-            remote_today.append(lesson)
+        if lesson["start"] is None:
+            # дистанційний урок без фіксованого часу - в пошук поточного/наступного не потрапляє
+            remote_no_time_today.append(lesson)
             continue
         start = _parse_time(lesson["start"])
         end = _parse_time(lesson["end"])
@@ -186,21 +192,21 @@ def find_current_and_next(now: datetime | None = None):
         elif start > now_t and upcoming is None:
             upcoming = lesson
 
-    return current, upcoming, remote_today, cancelled_today
+    return current, upcoming, remote_no_time_today, cancelled_today
 
 
 def format_status_message(prefix: str, now: datetime | None = None) -> str:
     """
     Формирует итоговый текст сообщения (например, об отбое тревоги)
     с указанием текущего/следующего урока и, если есть, дистанційних
-    та скасованих уроків сьогодні.
+    без часу та скасованих уроків сьогодні.
     """
-    current, upcoming, remote_today, cancelled_today = find_current_and_next(now)
+    current, upcoming, remote_no_time_today, cancelled_today = find_current_and_next(now)
 
     if current:
         body = (
-            f"Зараз: {current['number']}-й урок «{current['name']}» "
-            f"({current['start']}–{current['end']})"
+            f"Зараз: {current['number']}-й урок «{current['name']}», "
+            f"{_format_lesson_time(current)}"
         )
     elif upcoming:
         body = (
@@ -210,8 +216,8 @@ def format_status_message(prefix: str, now: datetime | None = None) -> str:
     else:
         body = "Уроків на сьогодні більше немає."
 
-    if remote_today:
-        names = ", ".join(f"{l['number']}-й «{l['name']}»" for l in remote_today)
+    if remote_no_time_today:
+        names = ", ".join(f"{l['number']}-й «{l['name']}»" for l in remote_no_time_today)
         body += f"\n\n(Дистанційно сьогодні також: {names})"
 
     if cancelled_today:
@@ -236,9 +242,7 @@ def format_day_schedule_message(prefix: str, now: datetime | None = None) -> str
 
     lines = []
     for lesson in today_lessons:
-        time_part = (
-            f"{lesson['start']}–{lesson['end']}" if not lesson["remote"] else "дистанційно"
-        )
+        time_part = _format_lesson_time(lesson)
         status = " (скасовано)" if lesson["cancelled"] else ""
         lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{status}")
 
