@@ -183,13 +183,17 @@ _DAY_NAMES = {
 
 def format_week_message(now: datetime | None = None) -> str:
     """
-    Формирует красиво оформлений розклад на весь поточний тиждень
+    Формирует красиво оформлений розклад на тиждень
     (понеділок-п'ятниця; вихідні пропускаються, якщо уроків немає).
+    У суботу/неділю показує вже НАСТУПНИЙ тиждень, бо поточний
+    навчальний тиждень уже закінчився.
     """
     if now is None:
         now = datetime.now(KYIV_TZ)
 
     monday = now.date() - timedelta(days=now.weekday())
+    if now.weekday() >= 5:  # 5=субота, 6=неділя
+        monday += timedelta(days=7)
 
     blocks = []
     for offset in range(7):
