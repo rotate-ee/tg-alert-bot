@@ -212,18 +212,26 @@ async def watch_alerts():
     async with aiohttp.ClientSession() as session:
         while True:
             event = await watcher.poll_once(session)
+            is_weekend = datetime.now(KYIV_TZ).weekday() >= 5  # 5=субота, 6=неділя
+            should_notify = config.NOTIFY_ALERTS_ON_WEEKENDS or not is_weekend
 
             if event == "ended":
-                text = format_status_message("🟢 Відбій тривоги")
-                log.info("Отбой тревоги, отправляю сообщение")
-                await bot.send_message(config.CHAT_ID, text)
+                if should_notify:
+                    text = format_status_message("🟢 Відбій тривоги")
+                    log.info("Отбой тревоги, отправляю сообщение")
+                    await bot.send_message(config.CHAT_ID, text)
+                else:
+                    log.info("Отбой тревоги у вихідний - сповіщення пропускаю")
 
             elif event == "started" and config.NOTIFY_ON_START:
-                log.info("Тревога началась, отправляю уведомление")
-                await bot.send_message(
-                    config.CHAT_ID,
-                    f"🔴 Повітряна тривога в «{config.REGION_TITLE}»!",
-                )
+                if should_notify:
+                    log.info("Тревога началась, отправляю уведомление")
+                    await bot.send_message(
+                        config.CHAT_ID,
+                        f"🔴 Повітряна тривога в «{config.REGION_TITLE}»!",
+                    )
+                else:
+                    log.info("Тривога почалась у вихідний - сповіщення пропускаю")
 
             await asyncio.sleep(config.POLL_INTERVAL_SECONDS)
 

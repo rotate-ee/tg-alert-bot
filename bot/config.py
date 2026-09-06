@@ -53,3 +53,8 @@ MORNING_DIGEST_TIME = os.getenv("MORNING_DIGEST_TIME", "10:00").strip()
 # Далі тижні чергуються сами: наступний тиждень - вдома, через тиждень -
 # знову в школі, і т.д. Порожньо - ознака "школа/вдома" ніде не показується.
 SCHOOL_WEEK_ANCHOR_MONDAY = os.getenv("SCHOOL_WEEK_ANCHOR_MONDAY", "").strip()
+
+# Чи слати повідомлення про початок/відбій тривоги в суботу і неділю.
+# За замовчуванням - ні (моніторинг у фоні продовжується, просто без
+# сповіщень у чат). true - слати як завжди, і у вихідні теж.
+NOTIFY_ALERTS_ON_WEEKENDS = os.getenv("NOTIFY_ALERTS_ON_WEEKENDS", "false").strip().lower() == "true"
