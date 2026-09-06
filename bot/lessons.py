@@ -52,6 +52,39 @@ def week_group(now: datetime) -> str:
     return "1_2" if week_of_month in (1, 2) else "3_4"
 
 
+def _school_week_anchor_monday() -> date | None:
+    raw = getattr(config, "SCHOOL_WEEK_ANCHOR_MONDAY", "").strip()
+    if not raw:
+        return None
+    try:
+        d = date.fromisoformat(raw)
+    except ValueError:
+        return None
+    return d - timedelta(days=d.weekday())  # на всяк випадок приводимо до понеділка
+
+
+def is_school_week(d: date) -> bool | None:
+    """
+    True - очний тиждень (в школі), False - тиждень вдома (дистанційно),
+    None - чергування не налаштоване (SCHOOL_WEEK_ANCHOR_MONDAY порожній).
+    Рахується від опорного понеділка: парна різниця тижнів - той самий
+    тип, що й опорний (школа), непарна - протилежний (вдома).
+    """
+    anchor = _school_week_anchor_monday()
+    if anchor is None:
+        return None
+    monday = d - timedelta(days=d.weekday())
+    weeks_diff = (monday - anchor).days // 7
+    return weeks_diff % 2 == 0
+
+
+def week_type_label(d: date) -> str | None:
+    school = is_school_week(d)
+    if school is None:
+        return None
+    return "🏫 Очний тиждень (в школі)" if school else "🏠 Тиждень вдома (дистанційно)"
+
+
 def _resolve_entry(entry, group: str) -> str | None:
     """Строка -> сам предмет. Словарь {"1_2":.., "3_4":..} -> предмет для текущей группы недель (или None, если урока в эту группу нет)."""
     if isinstance(entry, str):
@@ -153,6 +186,9 @@ def format_week_message(now: datetime | None = None) -> str:
         blocks.append("\n".join(lines))
 
     title = f"🗓 Розклад на тиждень ({monday.strftime('%d.%m')}–{(monday + timedelta(days=4)).strftime('%d.%m')})"
+    week_label = week_type_label(monday)
+    if week_label:
+        title += f"\n{week_label}"
 
     if not blocks:
         return f"{title}\n\nУроків на цьому тижні немає."
@@ -246,4 +282,9 @@ def format_day_schedule_message(prefix: str, now: datetime | None = None) -> str
         status = " (скасовано)" if lesson["cancelled"] else ""
         lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{status}")
 
-    return f"{prefix}\n\n" + "\n".join(lines)
+    body = "\n".join(lines)
+    week_label = week_type_label(now.date())
+    if week_label:
+        body = f"{week_label}\n\n{body}"
+
+    return f"{prefix}\n\n{body}"
