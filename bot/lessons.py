@@ -20,8 +20,9 @@ def load_schedule() -> dict:
         data = json.load(f)
     bells = {int(k): v for k, v in data["bells"].items()}
     days = {int(k): v for k, v in data["days"].items()}
+    rooms = {int(k): v for k, v in data.get("rooms", {}).items()}
     remote_numbers = set(data.get("remote_lesson_numbers", []))
-    return {"bells": bells, "days": days, "remote_numbers": remote_numbers}
+    return {"bells": bells, "days": days, "rooms": rooms, "remote_numbers": remote_numbers}
 
 
 def _parse_time(value: str) -> time:
@@ -35,6 +36,20 @@ def _format_lesson_time(lesson: dict) -> str:
         return "дистанційно"
     base = f"{lesson['start']}–{lesson['end']}"
     return f"{base} (дистанційно)" if lesson["remote"] else base
+
+
+def _format_lesson_room(lesson: dict, d: date) -> str:
+    """
+    ", каб. 303" - якщо є кабінет, урок не дистанційний і тиждень
+    очний (або чергування школа/вдома взагалі не налаштоване).
+    Порожній рядок - якщо кабінет показувати не треба.
+    """
+    if not lesson["room"] or lesson["remote"]:
+        return ""
+    school = is_school_week(d)
+    if school is False:
+        return ""
+    return f", каб. {lesson['room']}"
 
 
 def week_group(now: datetime) -> str:
@@ -86,20 +101,27 @@ def week_type_label(d: date) -> str | None:
 
 
 def _resolve_entry(entry, group: str) -> str | None:
-    """Строка -> сам предмет. Словарь {"1_2":.., "3_4":..} -> предмет для текущей группы недель (или None, если урока в эту группу нет)."""
-    if isinstance(entry, str):
+    """Строка -> сам предмет/кабінет. None -> None (немає). Словарь {"1_2":.., "3_4":..} -> значення для поточної групи недель (або None, якщо для цієї групи нічого немає)."""
+    if entry is None or isinstance(entry, str):
         return entry
     return entry.get(group)
 
 
 def _build_day_lessons(
-    day_entries: list, bells: dict, group: str, cancelled: set[int], remote_numbers: set[int]
+    day_entries: list,
+    bells: dict,
+    group: str,
+    cancelled: set[int],
+    remote_numbers: set[int],
+    room_entries: list | None = None,
 ) -> list[dict]:
     """
     Разворачивает список предметов дня в список уроков с временем,
     пометкой "remote" (дистанційно - незалежно від наявності часу
-    дзвінка) и пометкой "cancelled" для уроків, скасованих учителями.
+    дзвінка), кабінетом ("room") і пометкой "cancelled" для уроків,
+    скасованих учителями.
     """
+    room_entries = room_entries or []
     lessons = []
     for idx, entry in enumerate(day_entries):
         number = idx + 1
@@ -108,6 +130,7 @@ def _build_day_lessons(
             continue  # в эту группу недель этого урока просто нет
 
         bell = bells.get(number)
+        room_entry = room_entries[idx] if idx < len(room_entries) else None
         lessons.append({
             "number": number,
             "name": name,
@@ -115,6 +138,7 @@ def _build_day_lessons(
             "end": bell["end"] if bell else None,
             "remote": bell is None or number in remote_numbers,
             "cancelled": number in cancelled,
+            "room": _resolve_entry(room_entry, group),
         })
     return lessons
 
@@ -125,9 +149,10 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
     schedule = load_schedule()
     group = week_group(now)
     day_entries = schedule["days"].get(now.weekday(), [])
+    room_entries = schedule["rooms"].get(now.weekday(), [])
     cancelled = cancellations.get_cancelled_numbers(now.date())
     return _build_day_lessons(
-        day_entries, schedule["bells"], group, cancelled, schedule["remote_numbers"]
+        day_entries, schedule["bells"], group, cancelled, schedule["remote_numbers"], room_entries
     )
 
 
@@ -180,8 +205,9 @@ def format_week_message(now: datetime | None = None) -> str:
         lines = [header, "─" * 22]
         for lesson in lessons:
             time_part = _format_lesson_time(lesson)
+            room_part = _format_lesson_room(lesson, d)
             status = " ❌" if lesson["cancelled"] else ""
-            lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{status}")
+            lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{room_part}{status}")
 
         blocks.append("\n".join(lines))
 
@@ -237,12 +263,15 @@ def format_status_message(prefix: str, now: datetime | None = None) -> str:
     с указанием текущего/следующего урока и, если есть, дистанційних
     без часу та скасованих уроків сьогодні.
     """
+    if now is None:
+        now = datetime.now(KYIV_TZ)
+
     current, upcoming, remote_no_time_today, cancelled_today = find_current_and_next(now)
 
     if current:
         body = (
             f"Зараз: {current['number']}-й урок «{current['name']}», "
-            f"{_format_lesson_time(current)}"
+            f"{_format_lesson_time(current)}{_format_lesson_room(current, now.date())}"
         )
     elif upcoming:
         body = (
@@ -279,8 +308,9 @@ def format_day_schedule_message(prefix: str, now: datetime | None = None) -> str
     lines = []
     for lesson in today_lessons:
         time_part = _format_lesson_time(lesson)
+        room_part = _format_lesson_room(lesson, now.date())
         status = " (скасовано)" if lesson["cancelled"] else ""
-        lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{status}")
+        lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{room_part}{status}")
 
     body = "\n".join(lines)
     week_label = week_type_label(now.date())
