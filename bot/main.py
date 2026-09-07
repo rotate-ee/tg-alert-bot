@@ -70,7 +70,8 @@ async def cmd_help(message: Message):
             "/cancel <номер> — скасувати урок сьогодні (наприклад /cancel 3)\n"
             "/cancel <номер> <РРРР-ММ-ДД> — скасувати урок на конкретну дату\n"
             "/uncancel <номер> [дата] — повернути урок назад\n"
-            "/cancelled [дата] — список скасованих на день"
+            "/cancelled [дата] — список скасованих на день\n"
+            "/diag — перевірити, чи зберігаються скасування на диску"
         )
     await message.answer(text)
 
@@ -172,6 +173,13 @@ async def cmd_cancelled(message: Message):
         name = lesson["name"] if lesson else "?"
         lines.append(f"{n}-й «{name}»")
     await message.answer(f"Скасовано на {target_date.isoformat()}:\n" + "\n".join(lines))
+
+
+@dp.message(Command("diag"))
+async def cmd_diag(message: Message):
+    if not _is_allowed(message):
+        return
+    await message.answer("🔧 Діагностика збереження скасованих уроків:\n\n" + cancellations.diagnostics())
 
 
 # ---------- "Вас відпустили?" - питання адмінам при тривозі ----------
