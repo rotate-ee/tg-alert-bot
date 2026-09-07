@@ -7,22 +7,28 @@ Telegram-бот: знает расписание уроков класса и п
 """
 import asyncio
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import aiohttp
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 import cancellations
 import config
 from alerts import AlertWatcher
 from lessons import (
+    find_current_and_next,
     format_day_schedule_message,
+    format_lesson_room,
+    format_lesson_time,
     format_status_message,
     format_week_message,
     get_lesson_by_number,
+    get_today_lessons,
+    lesson_start_datetime,
+    week_type_label,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -168,6 +174,61 @@ async def cmd_cancelled(message: Message):
     await message.answer(f"Скасовано на {target_date.isoformat()}:\n" + "\n".join(lines))
 
 
+# ---------- "Вас відпустили?" - питання адмінам при тривозі ----------
+
+def _alert_dismiss_keyboard(d: date, number: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[
+            InlineKeyboardButton(text="Так", callback_data=f"ady:{d.isoformat()}:{number}"),
+            InlineKeyboardButton(text="Ні", callback_data="adn"),
+        ]]
+    )
+
+
+async def ask_admins_if_dismissed(current_lesson: dict, today: date):
+    if not config.ADMIN_IDS:
+        return
+    text = (
+        f"🔴 Тривога. Зараз {current_lesson['number']}-й урок «{current_lesson['name']}».\n"
+        "Вас відпустили?"
+    )
+    kb = _alert_dismiss_keyboard(today, current_lesson["number"])
+    for admin_id in config.ADMIN_IDS:
+        try:
+            await bot.send_message(admin_id, text, reply_markup=kb)
+        except Exception as e:
+            log.warning("Не вдалося надіслати ЛС адміну %s: %s", admin_id, e)
+
+
+@dp.callback_query(F.data == "adn")
+async def cb_alert_dismiss_no(callback: CallbackQuery):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer()
+        return
+    await callback.message.edit_text(callback.message.text + "\n\n➖ Відповідь: ні. Нічого не змінюю.")
+    await callback.answer()
+
+
+@dp.callback_query(F.data.startswith("ady:"))
+async def cb_alert_dismiss_yes(callback: CallbackQuery):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer()
+        return
+
+    _, date_str, number_str = callback.data.split(":")
+    d = date.fromisoformat(date_str)
+    number = int(number_str)
+
+    lesson = get_lesson_by_number(number, d)
+    cancellations.cancel_lesson(d, number)
+    name = lesson["name"] if lesson else "?"
+
+    await callback.message.edit_text(
+        callback.message.text + f"\n\n✅ Скасовано: {number}-й урок «{name}» ({d.isoformat()})"
+    )
+    await callback.answer("Урок скасовано")
+
+
 # ---------- фоновая задача: ранкова розсилка розкладу ----------
 
 def _parse_digest_time() -> tuple[int, int] | None:
@@ -204,6 +265,101 @@ async def morning_digest():
             log.info("Сьогодні уроків немає (вихідний) - ранкову розсилку пропускаю")
 
 
+# ---------- фоновая задача: нагадування за N хвилин до уроку ----------
+
+async def lesson_reminders():
+    if config.LESSON_REMINDER_MINUTES is None:
+        log.info("Нагадування про уроки вимкнені (LESSON_REMINDER_MINUTES=off)")
+        return
+
+    minutes_before = config.LESSON_REMINDER_MINUTES
+
+    while True:
+        now = datetime.now(KYIV_TZ)
+        today = now.date()
+        pending = []
+        for lesson in get_today_lessons(now):
+            if lesson["cancelled"]:
+                continue
+            start_dt = lesson_start_datetime(lesson, today)
+            if start_dt is None:
+                continue
+            reminder_dt = start_dt - timedelta(minutes=minutes_before)
+            if reminder_dt > now:
+                pending.append((reminder_dt, lesson))
+
+        if not pending:
+            # на сьогодні нагадувати більше нічого - спимо до завтрашнього ранку
+            tomorrow = datetime.combine(today + timedelta(days=1), time(0, 1), tzinfo=KYIV_TZ)
+            await asyncio.sleep((tomorrow - now).total_seconds())
+            continue
+
+        pending.sort(key=lambda pair: pair[0])
+        reminder_dt, lesson = pending[0]
+        await asyncio.sleep((reminder_dt - now).total_seconds())
+
+        # перевіряємо ще раз прямо перед відправкою - раптом урок щойно скасували
+        fresh = get_lesson_by_number(lesson["number"], today)
+        if fresh and not fresh["cancelled"]:
+            text = (
+                f"⏰ За {minutes_before} хв: {fresh['number']}-й урок «{fresh['name']}», "
+                f"{format_lesson_time(fresh)}{format_lesson_room(fresh, today)}"
+            )
+            log.info("Надсилаю нагадування про %s-й урок", fresh["number"])
+            await bot.send_message(config.CHAT_ID, text)
+        else:
+            log.info("Урок %s скасовано, нагадування пропускаю", lesson["number"])
+        # цикл повториться і сам перерахує наступне найближче нагадування
+
+
+# ---------- фоновая задача: неділя ввечері - тип наступного тижня ----------
+
+def _parse_hhmm(raw: str) -> tuple[int, int] | None:
+    if not raw or raw.lower() == "off":
+        return None
+    try:
+        h, m = map(int, raw.split(":"))
+        return h, m
+    except ValueError:
+        return None
+
+
+async def week_type_sunday_reminder():
+    parsed = _parse_hhmm(config.WEEK_TYPE_REMINDER_TIME)
+    if parsed is None:
+        log.info("Недільне нагадування про тип тижня вимкнене")
+        return
+
+    hour, minute = parsed
+    while True:
+        now = datetime.now(KYIV_TZ)
+        days_until_sunday = (6 - now.weekday()) % 7
+        target = (now + timedelta(days=days_until_sunday)).replace(
+            hour=hour, minute=minute, second=0, microsecond=0
+        )
+        if target <= now:
+            target += timedelta(days=7)
+        await asyncio.sleep((target - now).total_seconds())
+
+        next_monday = target.date() + timedelta(days=1)
+        label = week_type_label(next_monday)
+        if label is None:
+            log.info("SCHOOL_WEEK_ANCHOR_MONDAY не налаштовано - недільне нагадування пропускаю")
+            continue
+
+        friday = next_monday + timedelta(days=4)
+        text = (
+            f"📢 Наступного тижня ({next_monday.strftime('%d.%m')}–{friday.strftime('%d.%m')}):\n"
+            f"{label}"
+        )
+        log.info("Надсилаю недільне нагадування про тип тижня")
+        for admin_id in config.ADMIN_IDS:
+            try:
+                await bot.send_message(admin_id, text)
+            except Exception as e:
+                log.warning("Не вдалося надіслати ЛС адміну %s: %s", admin_id, e)
+
+
 # ---------- фоновая задача: опрос статуса тревоги ----------
 
 async def watch_alerts():
@@ -233,12 +389,20 @@ async def watch_alerts():
                 else:
                     log.info("Тривога почалась у вихідний - сповіщення пропускаю")
 
+            if event == "started":
+                current, _, _, _ = find_current_and_next(datetime.now(KYIV_TZ))
+                if current is not None:
+                    log.info("Питаю адмінів, чи відпустили з %s-го уроку", current["number"])
+                    await ask_admins_if_dismissed(current, datetime.now(KYIV_TZ).date())
+
             await asyncio.sleep(config.POLL_INTERVAL_SECONDS)
 
 
 async def main():
     asyncio.create_task(watch_alerts())
     asyncio.create_task(morning_digest())
+    asyncio.create_task(lesson_reminders())
+    asyncio.create_task(week_type_sunday_reminder())
     log.info("Бот запущен, слежу за регионом: %s", config.REGION_TITLE)
     await dp.start_polling(bot)
 

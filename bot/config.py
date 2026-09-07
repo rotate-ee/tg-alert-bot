@@ -58,3 +58,13 @@ SCHOOL_WEEK_ANCHOR_MONDAY = os.getenv("SCHOOL_WEEK_ANCHOR_MONDAY", "").strip()
 # За замовчуванням - ні (моніторинг у фоні продовжується, просто без
 # сповіщень у чат). true - слати як завжди, і у вихідні теж.
 NOTIFY_ALERTS_ON_WEEKENDS = os.getenv("NOTIFY_ALERTS_ON_WEEKENDS", "false").strip().lower() == "true"
+
+# За скільки хвилин до початку наступного уроку слати коротке
+# нагадування в чат. "off" або "0" - вимкнути нагадування.
+_reminder_raw = os.getenv("LESSON_REMINDER_MINUTES", "5").strip()
+LESSON_REMINDER_MINUTES = None if _reminder_raw.lower() in ("off", "0", "") else int(_reminder_raw)
+
+# Во сколько (Europe/Kyiv, ЧЧ:ММ) у неділю ввечері слати окреме
+# повідомлення адмінам про тип наступного тижня (школа/вдома).
+# Працює тільки якщо налаштовано SCHOOL_WEEK_ANCHOR_MONDAY. "off" - вимкнути.
+WEEK_TYPE_REMINDER_TIME = os.getenv("WEEK_TYPE_REMINDER_TIME", "19:00").strip()
