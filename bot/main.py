@@ -28,7 +28,7 @@ from lessons import (
     get_lesson_by_number,
     get_today_lessons,
     lesson_start_datetime,
-    week_type_label,
+    is_school_week,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -342,22 +342,17 @@ async def week_type_sunday_reminder():
         await asyncio.sleep((target - now).total_seconds())
 
         next_monday = target.date() + timedelta(days=1)
-        label = week_type_label(next_monday)
-        if label is None:
+        school = is_school_week(next_monday)
+        if school is None:
             log.info("SCHOOL_WEEK_ANCHOR_MONDAY не налаштовано - недільне нагадування пропускаю")
             continue
 
         friday = next_monday + timedelta(days=4)
-        text = (
-            f"📢 Наступного тижня ({next_monday.strftime('%d.%m')}–{friday.strftime('%d.%m')}):\n"
-            f"{label}"
-        )
-        log.info("Надсилаю недільне нагадування про тип тижня")
-        for admin_id in config.ADMIN_IDS:
-            try:
-                await bot.send_message(admin_id, text)
-            except Exception as e:
-                log.warning("Не вдалося надіслати ЛС адміну %s: %s", admin_id, e)
+        week_word = "у школі" if school else "вдома"
+        text = f"{next_monday.strftime('%d.%m')} - {friday.strftime('%d.%m')} – {week_word}"
+
+        log.info("Надсилаю недільне нагадування про тип тижня в чат")
+        await bot.send_message(config.CHAT_ID, text)
 
 
 # ---------- фоновая задача: опрос статуса тревоги ----------
