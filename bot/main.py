@@ -277,6 +277,18 @@ async def morning_digest():
 
 # ---------- фоновая задача: нагадування за N хвилин до уроку ----------
 
+async def _delete_message_later(chat_id: int | str, message_id: int, when: datetime):
+    """Чекає до моменту `when` і видаляє повідомлення (нагадування) з чату."""
+    delay = (when - datetime.now(KYIV_TZ)).total_seconds()
+    if delay > 0:
+        await asyncio.sleep(delay)
+    try:
+        await bot.delete_message(chat_id, message_id)
+        log.info("Видалив нагадування (message_id=%s) - урок почався", message_id)
+    except Exception as e:
+        log.warning("Не вдалося видалити нагадування message_id=%s: %s", message_id, e)
+
+
 async def lesson_reminders():
     if config.LESSON_REMINDER_MINUTES is None:
         log.info("Нагадування про уроки вимкнені (LESSON_REMINDER_MINUTES=off)")
@@ -296,7 +308,7 @@ async def lesson_reminders():
                 continue
             reminder_dt = start_dt - timedelta(minutes=minutes_before)
             if reminder_dt > now:
-                pending.append((reminder_dt, lesson))
+                pending.append((reminder_dt, lesson, start_dt))
 
         if not pending:
             # на сьогодні нагадувати більше нічого - спимо до завтрашнього ранку
@@ -304,8 +316,8 @@ async def lesson_reminders():
             await asyncio.sleep((tomorrow - now).total_seconds())
             continue
 
-        pending.sort(key=lambda pair: pair[0])
-        reminder_dt, lesson = pending[0]
+        pending.sort(key=lambda triple: triple[0])
+        reminder_dt, lesson, start_dt = pending[0]
         await asyncio.sleep((reminder_dt - now).total_seconds())
 
         # перевіряємо ще раз прямо перед відправкою - раптом урок щойно скасували
@@ -320,7 +332,9 @@ async def lesson_reminders():
                 f"{format_lesson_time(fresh)}{format_lesson_room(fresh, today)}"
             )
             log.info("Надсилаю нагадування про %s-й урок", fresh["number"])
-            await bot.send_message(config.CHAT_ID, text)
+            sent = await bot.send_message(config.CHAT_ID, text)
+            # видалимо це повідомлення, як тільки урок почнеться
+            asyncio.create_task(_delete_message_later(config.CHAT_ID, sent.message_id, start_dt))
         else:
             log.info("Урок %s скасовано, нагадування пропускаю", lesson["number"])
         # цикл повториться і сам перерахує наступне найближче нагадування
