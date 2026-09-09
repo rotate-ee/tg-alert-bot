@@ -385,7 +385,21 @@ async def week_type_sunday_reminder():
 
 # ---------- фоновая задача: опрос статуса тревоги ----------
 
+async def _try_delete(chat_id: int | str, message_id: int | None):
+    if message_id is None:
+        return
+    try:
+        await bot.delete_message(chat_id, message_id)
+    except Exception as e:
+        log.warning("Не вдалося видалити старе повідомлення про тривогу: %s", e)
+
+
 async def watch_alerts():
+    # id останнього повідомлення "🔴 тривога почалась" і "🟢 відбій" -
+    # у чаті лишається тільки одне, найсвіжіше повідомлення про статус.
+    last_start_message_id: int | None = None
+    last_ended_message_id: int | None = None
+
     async with aiohttp.ClientSession() as session:
         while True:
             event = await alert_watcher.poll_once(session)
@@ -394,19 +408,29 @@ async def watch_alerts():
 
             if event == "ended":
                 if should_notify:
+                    # старе повідомлення "тривога почалась" більше не актуальне
+                    await _try_delete(config.CHAT_ID, last_start_message_id)
+                    last_start_message_id = None
+
                     text = format_status_message("🟢 Відбій тривоги")
                     log.info("Отбой тревоги, отправляю сообщение")
-                    await bot.send_message(config.CHAT_ID, text)
+                    sent = await bot.send_message(config.CHAT_ID, text)
+                    last_ended_message_id = sent.message_id
                 else:
                     log.info("Отбой тревоги у вихідний - сповіщення пропускаю")
 
             elif event == "started" and config.NOTIFY_ON_START:
                 if should_notify:
+                    # старе повідомлення "відбій" з минулого разу теж вже не актуальне
+                    await _try_delete(config.CHAT_ID, last_ended_message_id)
+                    last_ended_message_id = None
+
                     log.info("Тревога началась, отправляю уведомление")
-                    await bot.send_message(
+                    sent = await bot.send_message(
                         config.CHAT_ID,
                         f"🔴 Повітряна тривога в «{config.REGION_TITLE}»!",
                     )
+                    last_start_message_id = sent.message_id
                 else:
                     log.info("Тривога почалась у вихідний - сповіщення пропускаю")
 
