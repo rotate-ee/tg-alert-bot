@@ -25,6 +25,11 @@ class AlertWatcher:
         self.region_title = region_title
         self._was_active = False  # состояние с предыдущего опроса
 
+    @property
+    def is_active(self) -> bool:
+        """Чи триває тривога зараз (за останнім опитуванням)."""
+        return self._was_active
+
     async def _fetch_active_alerts(self, session: aiohttp.ClientSession) -> list[dict]:
         headers = {"Authorization": f"Bearer {self.token}"}
         async with session.get(API_URL, headers=headers, timeout=15) as resp:

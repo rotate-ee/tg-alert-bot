@@ -39,6 +39,8 @@ KYIV_TZ = ZoneInfo("Europe/Kyiv")
 bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher()
 
+alert_watcher = AlertWatcher(token=config.ALERTS_TOKEN, region_title=config.REGION_TITLE)
+
 
 # ---------- команды для ручной проверки в чате ----------
 
@@ -307,8 +309,12 @@ async def lesson_reminders():
         await asyncio.sleep((reminder_dt - now).total_seconds())
 
         # перевіряємо ще раз прямо перед відправкою - раптом урок щойно скасували
+        # або якраз зараз триває тривога (тоді нагадування не потрібне - є учні
+        # в укритті, після відбою бот сам напише, який урок зараз)
         fresh = get_lesson_by_number(lesson["number"], today)
-        if fresh and not fresh["cancelled"]:
+        if alert_watcher.is_active:
+            log.info("Зараз триває тривога - нагадування про %s-й урок пропускаю", lesson["number"])
+        elif fresh and not fresh["cancelled"]:
             text = (
                 f"⏰ За {minutes_before} хв: {fresh['number']}-й урок «{fresh['name']}», "
                 f"{format_lesson_time(fresh)}{format_lesson_room(fresh, today)}"
@@ -366,11 +372,9 @@ async def week_type_sunday_reminder():
 # ---------- фоновая задача: опрос статуса тревоги ----------
 
 async def watch_alerts():
-    watcher = AlertWatcher(token=config.ALERTS_TOKEN, region_title=config.REGION_TITLE)
-
     async with aiohttp.ClientSession() as session:
         while True:
-            event = await watcher.poll_once(session)
+            event = await alert_watcher.poll_once(session)
             is_weekend = datetime.now(KYIV_TZ).weekday() >= 5  # 5=субота, 6=неділя
             should_notify = config.NOTIFY_ALERTS_ON_WEEKENDS or not is_weekend
 
