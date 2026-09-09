@@ -296,10 +296,6 @@ def format_status_message(prefix: str, now: datetime | None = None) -> str:
         names = ", ".join(f"{l['number']}-й «{l['name']}»" for l in remote_no_time_today)
         body += f"\n\n(Дистанційно сьогодні також: {names})"
 
-    if cancelled_today:
-        names = ", ".join(f"{l['number']}-й «{l['name']}»" for l in cancelled_today)
-        body += f"\n\n(Скасовано сьогодні: {names})"
-
     return f"{prefix}\n\n{body}"
 
 
