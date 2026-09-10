@@ -385,6 +385,24 @@ async def week_type_sunday_reminder():
 
 # ---------- фоновая задача: опрос статуса тревоги ----------
 
+def _in_notify_window(now: datetime) -> bool:
+    """Чи потрапляє поточний час у діапазон ALERT_NOTIFY_FROM..ALERT_NOTIFY_TO."""
+    raw_from = config.ALERT_NOTIFY_FROM
+    raw_to = config.ALERT_NOTIFY_TO
+    if not raw_from or not raw_to or raw_from.lower() == "off" or raw_to.lower() == "off":
+        return True  # обмеження вимкнене
+    try:
+        fh, fm = map(int, raw_from.split(":"))
+        th, tm = map(int, raw_to.split(":"))
+    except ValueError:
+        return True  # некоректний формат - не обмежуємо
+
+    now_t = now.time()
+    start_t = time(fh, fm)
+    end_t = time(th, tm)
+    return start_t <= now_t <= end_t
+
+
 async def _try_delete(chat_id: int | str, message_id: int | None):
     if message_id is None:
         return
@@ -403,8 +421,11 @@ async def watch_alerts():
     async with aiohttp.ClientSession() as session:
         while True:
             event = await alert_watcher.poll_once(session)
-            is_weekend = datetime.now(KYIV_TZ).weekday() >= 5  # 5=субота, 6=неділя
-            should_notify = config.NOTIFY_ALERTS_ON_WEEKENDS or not is_weekend
+            now = datetime.now(KYIV_TZ)
+            is_weekend = now.weekday() >= 5  # 5=субота, 6=неділя
+            should_notify = (
+                (config.NOTIFY_ALERTS_ON_WEEKENDS or not is_weekend) and _in_notify_window(now)
+            )
 
             if event == "ended":
                 if should_notify:

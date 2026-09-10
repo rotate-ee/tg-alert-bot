@@ -59,6 +59,12 @@ SCHOOL_WEEK_ANCHOR_MONDAY = os.getenv("SCHOOL_WEEK_ANCHOR_MONDAY", "").strip()
 # сповіщень у чат). true - слати як завжди, і у вихідні теж.
 NOTIFY_ALERTS_ON_WEEKENDS = os.getenv("NOTIFY_ALERTS_ON_WEEKENDS", "false").strip().lower() == "true"
 
+# Часовий діапазон (Europe/Kyiv, ЧЧ:ММ), коли слати сповіщення про
+# тривогу/відбій у чат. Поза цим діапазоном бот мовчить (моніторинг у
+# фоні продовжується). Порожньо або "off" в обох полях - без обмежень.
+ALERT_NOTIFY_FROM = os.getenv("ALERT_NOTIFY_FROM", "10:00").strip()
+ALERT_NOTIFY_TO = os.getenv("ALERT_NOTIFY_TO", "19:00").strip()
+
 # За скільки хвилин до початку наступного уроку слати коротке
 # нагадування в чат. "off" або "0" - вимкнути нагадування.
 _reminder_raw = os.getenv("LESSON_REMINDER_MINUTES", "5").strip()
