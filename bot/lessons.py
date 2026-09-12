@@ -30,12 +30,21 @@ def _parse_time(value: str) -> time:
     return time(hour=h, minute=m)
 
 
-def format_lesson_time(lesson: dict) -> str:
-    """«11:00–11:45», «11:00–11:45 (дистанційно)» або просто «дистанційно» (якщо часу немає)."""
+def format_lesson_time(lesson: dict, d: date) -> str:
+    """
+    «11:00–11:45», «11:00–11:45 (дистанційно)» або просто «дистанційно»
+    (якщо часу немає). Позначку "(дистанційно)" додаємо тільки в очний
+    тиждень (або якщо чергування школа/вдома взагалі не налаштоване) -
+    в тиждень вдома і так усе дистанційно, зайве уточнення не потрібне.
+    """
     if lesson["start"] is None:
         return "дистанційно"
     base = f"{lesson['start']}–{lesson['end']}"
-    return f"{base} (дистанційно)" if lesson["remote"] else base
+    if not lesson["remote"]:
+        return base
+    if is_school_week(d) is False:
+        return base
+    return f"{base} (дистанційно)"
 
 
 def format_lesson_room(lesson: dict, d: date) -> str:
@@ -215,7 +224,7 @@ def format_week_message(now: datetime | None = None) -> str:
 
         lines = [header, "─" * 22]
         for lesson in lessons:
-            time_part = format_lesson_time(lesson)
+            time_part = format_lesson_time(lesson, d)
             room_part = format_lesson_room(lesson, d)
             status = " ❌" if lesson["cancelled"] else ""
             lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{room_part}{status}")
@@ -282,7 +291,7 @@ def format_status_message(prefix: str, now: datetime | None = None) -> str:
     if current:
         body = (
             f"Зараз: {current['number']}-й урок «{current['name']}», "
-            f"{format_lesson_time(current)}{format_lesson_room(current, now.date())}"
+            f"{format_lesson_time(current, now.date())}{format_lesson_room(current, now.date())}"
         )
     elif upcoming:
         body = (
@@ -314,7 +323,7 @@ def format_day_schedule_message(prefix: str, now: datetime | None = None) -> str
 
     lines = []
     for lesson in today_lessons:
-        time_part = format_lesson_time(lesson)
+        time_part = format_lesson_time(lesson, now.date())
         room_part = format_lesson_room(lesson, now.date())
         status = " (скасовано)" if lesson["cancelled"] else ""
         lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{room_part}{status}")

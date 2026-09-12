@@ -329,7 +329,7 @@ async def lesson_reminders():
         elif fresh and not fresh["cancelled"]:
             text = (
                 f"⏰ За {minutes_before} хв: {fresh['number']}-й урок «{fresh['name']}», "
-                f"{format_lesson_time(fresh)}{format_lesson_room(fresh, today)}"
+                f"{format_lesson_time(fresh, today)}{format_lesson_room(fresh, today)}"
             )
             log.info("Надсилаю нагадування про %s-й урок", fresh["number"])
             sent = await bot.send_message(config.CHAT_ID, text)
