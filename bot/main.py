@@ -17,6 +17,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 import cancellations
 import config
+import remote_overrides
 from alerts import AlertWatcher
 from lessons import (
     find_current_and_next,
@@ -239,6 +240,56 @@ async def cb_alert_dismiss_yes(callback: CallbackQuery):
     await callback.answer("Урок скасовано")
 
 
+# ---------- "7/8-й урок сьогодні очно?" - щоденне питання в очний день ----------
+
+def _in_person_keyboard(d: date, number: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[
+            InlineKeyboardButton(text="Так", callback_data=f"ip:yes:{d.isoformat()}:{number}"),
+            InlineKeyboardButton(text="Ні", callback_data=f"ip:no:{d.isoformat()}:{number}"),
+        ]]
+    )
+
+
+async def ask_in_person(lesson: dict, d: date):
+    if not config.ADMIN_IDS:
+        return
+    text = f"❓ {lesson['number']}-й урок «{lesson['name']}» сьогодні буде очно чи дистанційно?"
+    kb = _in_person_keyboard(d, lesson["number"])
+    for admin_id in config.ADMIN_IDS:
+        try:
+            await bot.send_message(admin_id, text, reply_markup=kb)
+        except Exception as e:
+            log.warning("Не вдалося надіслати ЛС адміну %s: %s", admin_id, e)
+
+
+@dp.callback_query(F.data.startswith("ip:"))
+async def cb_in_person(callback: CallbackQuery):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer()
+        return
+
+    _, action, date_str, number_str = callback.data.split(":")
+    d = date.fromisoformat(date_str)
+    number = int(number_str)
+    lesson = get_lesson_by_number(number, d)
+    name = lesson["name"] if lesson else "?"
+
+    if action == "yes":
+        remote_overrides.mark_in_person(d, number)
+        fresh = get_lesson_by_number(number, d)  # перечитуємо, щоб врахувати підтвердження
+        await callback.message.edit_text(callback.message.text + "\n\n✅ Так, буде очно.")
+        await callback.answer()
+
+        room_part = format_lesson_room(fresh, d) if fresh else ""
+        announce = f"📢 Сьогодні {number}-й урок «{name}» буде ОЧНО{room_part}"
+        log.info("Оголошую в чаті: %s-й урок сьогодні очно", number)
+        await bot.send_message(config.CHAT_ID, announce)
+    else:
+        await callback.message.edit_text(callback.message.text + "\n\n➖ Ні, залишається дистанційно.")
+        await callback.answer()
+
+
 # ---------- фоновая задача: ранкова розсилка розкладу ----------
 
 def _parse_digest_time() -> tuple[int, int] | None:
@@ -383,6 +434,48 @@ async def week_type_sunday_reminder():
         await bot.send_message(config.CHAT_ID, text)
 
 
+# ---------- фоновая задача: щоденне питання про 7/8 урок в очний день ----------
+
+def _parse_confirm_time() -> tuple[int, int] | None:
+    return _parse_hhmm(config.REMOTE_CONFIRM_TIME)
+
+
+async def remote_confirmation_daily():
+    parsed = _parse_confirm_time()
+    if parsed is None:
+        log.info("Щоденне питання про 7/8 урок вимкнене")
+        return
+
+    hour, minute = parsed
+    while True:
+        now = datetime.now(KYIV_TZ)
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        await asyncio.sleep((target - now).total_seconds())
+
+        today = target.date()
+        if today.weekday() >= 5:
+            log.info("Вихідний - питання про 7/8 урок не потрібне")
+            continue
+
+        school = is_school_week(today)
+        if school is False:
+            log.info("Тиждень вдома - питання про 7/8 урок не потрібне")
+            continue
+
+        for number in (7, 8):
+            lesson = get_lesson_by_number(number, today)
+            if lesson is None:
+                continue  # такого уроку сьогодні немає за розкладом
+            if lesson["cancelled"]:
+                continue
+            if remote_overrides.is_in_person(today, number):
+                continue  # вже підтверджено раніше
+            log.info("Питаю адмінів про %s-й урок сьогодні", number)
+            await ask_in_person(lesson, today)
+
+
 # ---------- фоновая задача: опрос статуса тревоги ----------
 
 def _in_notify_window(now: datetime) -> bool:
@@ -469,6 +562,7 @@ async def main():
     asyncio.create_task(morning_digest())
     asyncio.create_task(lesson_reminders())
     asyncio.create_task(week_type_sunday_reminder())
+    asyncio.create_task(remote_confirmation_daily())
     log.info("Бот запущен, слежу за регионом: %s", config.REGION_TITLE)
     await dp.start_polling(bot)
 

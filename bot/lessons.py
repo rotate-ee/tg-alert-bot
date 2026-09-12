@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 import cancellations
 import config
+import remote_overrides
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 SCHEDULE_PATH = Path(__file__).parent / "schedule.json"
@@ -30,30 +31,45 @@ def _parse_time(value: str) -> time:
     return time(hour=h, minute=m)
 
 
+def is_lesson_remote_today(lesson: dict, d: date) -> bool:
+    """
+    Чи вважати урок дистанційним саме сьогодні.
+    - Якщо урок взагалі не з "дистанційної" категорії (1-6 клас уроки) -
+      завжди False.
+    - Якщо тиждень вдома - технічно все дистанційно, але для таких
+      уроків окрема позначка не потрібна (весь день і так вдома) - False.
+    - Якщо очний тиждень (або чергування не налаштоване) і адмін
+      підтвердив "Так, буде очно" на сьогодні - False.
+    - Інакше (типовий випадок за замовчуванням) - True.
+    """
+    if not lesson["remote"]:
+        return False
+    if is_school_week(d) is False:
+        return False
+    if remote_overrides.is_in_person(d, lesson["number"]):
+        return False
+    return True
+
+
 def format_lesson_time(lesson: dict, d: date) -> str:
     """
     «11:00–11:45», «11:00–11:45 (дистанційно)» або просто «дистанційно»
-    (якщо часу немає). Позначку "(дистанційно)" додаємо тільки в очний
-    тиждень (або якщо чергування школа/вдома взагалі не налаштоване) -
-    в тиждень вдома і так усе дистанційно, зайве уточнення не потрібне.
+    (якщо часу немає). Позначку "(дистанційно)" додаємо тільки якщо
+    is_lesson_remote_today повертає True.
     """
     if lesson["start"] is None:
         return "дистанційно"
     base = f"{lesson['start']}–{lesson['end']}"
-    if not lesson["remote"]:
-        return base
-    if is_school_week(d) is False:
-        return base
-    return f"{base} (дистанційно)"
+    return f"{base} (дистанційно)" if is_lesson_remote_today(lesson, d) else base
 
 
 def format_lesson_room(lesson: dict, d: date) -> str:
     """
-    ", каб. 303" - якщо є кабінет, урок не дистанційний і тиждень
-    очний (або чергування школа/вдома взагалі не налаштоване).
+    ", каб. 303" - якщо є кабінет, урок не вважається дистанційним
+    сьогодні (див. is_lesson_remote_today) і тиждень очний.
     Порожній рядок - якщо кабінет показувати не треба.
     """
-    if not lesson["room"] or lesson["remote"]:
+    if not lesson["room"] or is_lesson_remote_today(lesson, d):
         return ""
     school = is_school_week(d)
     if school is False:

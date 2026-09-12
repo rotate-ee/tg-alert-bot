@@ -65,6 +65,10 @@ NOTIFY_ALERTS_ON_WEEKENDS = os.getenv("NOTIFY_ALERTS_ON_WEEKENDS", "false").stri
 ALERT_NOTIFY_FROM = os.getenv("ALERT_NOTIFY_FROM", "10:00").strip()
 ALERT_NOTIFY_TO = os.getenv("ALERT_NOTIFY_TO", "19:00").strip()
 
+# Во сколько (Europe/Kyiv, ЧЧ:ММ) в очний день питати адміна, чи 7-й
+# і 8-й уроки будуть очно (замість дистанційних за замовчуванням).
+REMOTE_CONFIRM_TIME = os.getenv("REMOTE_CONFIRM_TIME", "12:00").strip()
+
 # За скільки хвилин до початку наступного уроку слати коротке
 # нагадування в чат. "off" або "0" - вимкнути нагадування.
 _reminder_raw = os.getenv("LESSON_REMINDER_MINUTES", "5").strip()
