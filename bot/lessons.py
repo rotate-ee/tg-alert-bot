@@ -213,6 +213,20 @@ _DAY_NAMES = {
 }
 
 
+def format_cancelled_status(lesson: dict, d: date) -> str:
+    """
+    Позначка для скасованого уроку в розкладі на день/тиждень:
+    у тиждень вдома - "(Класрум)" (урок не зник, а перейшов у Classroom),
+    в очний тиждень (або якщо чергування не налаштоване) - "(скасовано)".
+    Порожній рядок, якщо урок не скасовано.
+    """
+    if not lesson["cancelled"]:
+        return ""
+    if is_school_week(d) is False:
+        return " (Класрум)"
+    return " (скасовано)"
+
+
 def format_week_message(now: datetime | None = None) -> str:
     """
     Формирует красиво оформлений розклад на тиждень
@@ -242,7 +256,7 @@ def format_week_message(now: datetime | None = None) -> str:
         for lesson in lessons:
             time_part = format_lesson_time(lesson, d)
             room_part = format_lesson_room(lesson, d)
-            status = " ❌" if lesson["cancelled"] else ""
+            status = format_cancelled_status(lesson, d)
             lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{room_part}{status}")
 
         blocks.append("\n".join(lines))
@@ -341,7 +355,7 @@ def format_day_schedule_message(prefix: str, now: datetime | None = None) -> str
     for lesson in today_lessons:
         time_part = format_lesson_time(lesson, now.date())
         room_part = format_lesson_room(lesson, now.date())
-        status = " (скасовано)" if lesson["cancelled"] else ""
+        status = format_cancelled_status(lesson, now.date())
         lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{room_part}{status}")
 
     body = "\n".join(lines)
