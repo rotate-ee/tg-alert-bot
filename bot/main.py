@@ -15,6 +15,7 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+import bell_overrides
 import cancellations
 import config
 import remote_overrides
@@ -74,7 +75,10 @@ async def cmd_help(message: Message):
             "/cancel <номер> <РРРР-ММ-ДД> — скасувати урок на конкретну дату\n"
             "/uncancel <номер> [дата] — повернути урок назад\n"
             "/cancelled [дата] — список скасованих на день\n"
-            "/diag — перевірити, чи зберігаються скасування на диску"
+            "/diag — перевірити, чи зберігаються скасування на диску\n"
+            "/settime <номер> <початок> <кінець> [дата] — змінити час уроку на цей день\n"
+            "/resettime <номер> [дата] — повернути стандартний час уроку\n"
+            "/endnow [номер] — позначити, що урок закінчився саме зараз"
         )
     await message.answer(text)
 
@@ -183,6 +187,117 @@ async def cmd_diag(message: Message):
     if not _is_allowed(message):
         return
     await message.answer("🔧 Діагностика збереження скасованих уроків:\n\n" + cancellations.diagnostics())
+
+
+def _parse_hhmm_strict(raw: str) -> str | None:
+    """Перевіряє формат ЧЧ:ММ і повертає його ж (нормалізованим) або None, якщо невірний."""
+    try:
+        h, m = map(int, raw.split(":"))
+        if not (0 <= h <= 23 and 0 <= m <= 59):
+            return None
+        return f"{h:02d}:{m:02d}"
+    except ValueError:
+        return None
+
+
+@dp.message(Command("settime"))
+async def cmd_settime(message: Message):
+    if not _is_allowed(message):
+        return
+
+    parts = message.text.split()[1:]
+    if len(parts) < 3:
+        await message.answer("Використання: /settime <номер> <початок> <кінець> [дата РРРР-ММ-ДД]\nПриклад: /settime 3 12:50 13:20")
+        return
+
+    try:
+        number = int(parts[0])
+    except ValueError:
+        await message.answer("Номер уроку має бути числом. Приклад: /settime 3 12:50 13:20")
+        return
+
+    start = _parse_hhmm_strict(parts[1])
+    end = _parse_hhmm_strict(parts[2])
+    if start is None or end is None:
+        await message.answer("Час має бути у форматі ЧЧ:ММ. Приклад: /settime 3 12:50 13:20")
+        return
+
+    target_date = _parse_date_arg(parts[3] if len(parts) > 3 else None)
+    if target_date is None:
+        await message.answer("Невірний формат дати. Приклад: /settime 3 12:50 13:20 2026-09-10")
+        return
+
+    lesson = get_lesson_by_number(number, target_date)
+    if lesson is None:
+        await message.answer(f"На {target_date.isoformat()} немає {number}-го уроку за розкладом.")
+        return
+
+    bell_overrides.set_override(target_date, number, start, end)
+    await message.answer(
+        f"✅ Час змінено: {number}-й урок «{lesson['name']}» тепер {start}–{end} ({target_date.isoformat()})"
+    )
+
+
+@dp.message(Command("resettime"))
+async def cmd_resettime(message: Message):
+    if not _is_allowed(message):
+        return
+
+    parts = message.text.split()[1:]
+    if not parts:
+        await message.answer("Використання: /resettime <номер> [дата РРРР-ММ-ДД]")
+        return
+
+    try:
+        number = int(parts[0])
+    except ValueError:
+        await message.answer("Номер уроку має бути числом. Приклад: /resettime 3")
+        return
+
+    target_date = _parse_date_arg(parts[1] if len(parts) > 1 else None)
+    if target_date is None:
+        await message.answer("Невірний формат дати. Приклад: /resettime 3 2026-09-10")
+        return
+
+    cleared = bell_overrides.clear_override(target_date, number)
+    if cleared:
+        await message.answer(f"↩️ Час {number}-го уроку повернуто до стандартного розкладу ({target_date.isoformat()})")
+    else:
+        await message.answer(f"Для {number}-го уроку на {target_date.isoformat()} і так немає змін часу.")
+
+
+@dp.message(Command("endnow"))
+async def cmd_endnow(message: Message):
+    if not _is_allowed(message):
+        return
+
+    now = datetime.now(KYIV_TZ)
+    today = now.date()
+    parts = message.text.split()[1:]
+
+    if parts:
+        try:
+            number = int(parts[0])
+        except ValueError:
+            await message.answer("Номер уроку має бути числом. Приклад: /endnow 3 (або просто /endnow - для поточного уроку)")
+            return
+        lesson = get_lesson_by_number(number, today)
+        if lesson is None:
+            await message.answer(f"Сьогодні немає {number}-го уроку за розкладом.")
+            return
+    else:
+        current, _, _, _ = find_current_and_next(now)
+        if current is None:
+            await message.answer("Зараз немає активного уроку. Вкажіть номер вручну: /endnow 3")
+            return
+        lesson = current
+
+    new_end = now.strftime("%H:%M")
+    start = lesson["start"] or new_end
+    bell_overrides.set_override(today, lesson["number"], start, new_end)
+    await message.answer(
+        f"✅ {lesson['number']}-й урок «{lesson['name']}» позначено завершеним раніше, о {new_end}"
+    )
 
 
 # ---------- "Вас відпустили?" - питання адмінам при тривозі ----------

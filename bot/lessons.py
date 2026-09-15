@@ -8,6 +8,7 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import bell_overrides
 import cancellations
 import config
 import remote_overrides
@@ -171,14 +172,25 @@ def _build_day_lessons(
 def get_today_lessons(now: datetime | None = None) -> list[dict]:
     if now is None:
         now = datetime.now(KYIV_TZ)
+    today = now.date()
     schedule = load_schedule()
     group = week_group(now)
     day_entries = schedule["days"].get(now.weekday(), [])
     room_entries = schedule["rooms"].get(now.weekday(), [])
-    cancelled = cancellations.get_cancelled_numbers(now.date())
-    return _build_day_lessons(
+    cancelled = cancellations.get_cancelled_numbers(today)
+    lessons = _build_day_lessons(
         day_entries, schedule["bells"], group, cancelled, schedule["remote_numbers"], room_entries
     )
+
+    # разові зміни часу дзвінка (/settime, /endnow) - перекривають
+    # стандартний час тільки для цього уроку і цієї дати
+    for lesson in lessons:
+        override = bell_overrides.get_override(today, lesson["number"])
+        if override:
+            lesson["start"] = override["start"]
+            lesson["end"] = override["end"]
+
+    return lessons
 
 
 def get_lessons_for_date(d: date) -> list[dict]:
