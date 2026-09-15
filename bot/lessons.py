@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 import bell_overrides
 import cancellations
 import config
+import early_end
 import remote_overrides
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
@@ -310,7 +311,11 @@ def find_current_and_next(now: datetime | None = None):
             remote_no_time_today.append(lesson)
             continue
         start = _parse_time(lesson["start"])
-        end = _parse_time(lesson["end"])
+        # /endnow міг позначити, що урок закінчився раніше - це впливає
+        # тільки тут (пошук поточного/наступного), сам lesson["end"] і
+        # відображуваний розклад лишаються без змін
+        early = early_end.get_early_end(now.date(), lesson["number"])
+        end = _parse_time(early) if early else _parse_time(lesson["end"])
         if start <= now_t <= end:
             current = lesson
         elif start > now_t and upcoming is None:

@@ -18,6 +18,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 import bell_overrides
 import cancellations
 import config
+import early_end
 import remote_overrides
 from alerts import AlertWatcher
 from lessons import (
@@ -87,7 +88,8 @@ async def cmd_help(message: Message):
             "/diag — перевірити, чи зберігаються скасування на диску\n"
             "/settime <номер> <початок> <кінець> [дата] — змінити час уроку на цей день\n"
             "/resettime <номер> [дата] — повернути стандартний час уроку\n"
-            "/endnow [номер] — позначити, що урок закінчився саме зараз"
+            "/endnow [номер] — позначити, що урок закінчився саме зараз\n"
+            "/undoend <номер> [дата] — прибрати позначку дострокового завершення"
         )
     await message.answer(text)
 
@@ -302,11 +304,39 @@ async def cmd_endnow(message: Message):
         lesson = current
 
     new_end = now.strftime("%H:%M")
-    start = lesson["start"] or new_end
-    bell_overrides.set_override(today, lesson["number"], start, new_end)
+    early_end.mark_early_end(today, lesson["number"], new_end)
     await message.answer(
-        f"✅ {lesson['number']}-й урок «{lesson['name']}» позначено завершеним раніше, о {new_end}"
+        f"✅ {lesson['number']}-й урок «{lesson['name']}» позначено завершеним раніше, о {new_end}\n"
+        f"(сам розклад дзвінків не змінюється - тільки визначення поточного уроку)"
     )
+
+
+@dp.message(Command("undoend"))
+async def cmd_undoend(message: Message):
+    if not _is_allowed(message):
+        return
+
+    parts = message.text.split()[1:]
+    if not parts:
+        await message.answer("Використання: /undoend <номер> [дата РРРР-ММ-ДД]")
+        return
+
+    try:
+        number = int(parts[0])
+    except ValueError:
+        await message.answer("Номер уроку має бути числом. Приклад: /undoend 3")
+        return
+
+    target_date = _parse_date_arg(parts[1] if len(parts) > 1 else None)
+    if target_date is None:
+        await message.answer("Невірний формат дати. Приклад: /undoend 3 2026-09-10")
+        return
+
+    cleared = early_end.clear_early_end(target_date, number)
+    if cleared:
+        await message.answer(f"↩️ Позначку про дострокове завершення {number}-го уроку прибрано ({target_date.isoformat()})")
+    else:
+        await message.answer(f"Для {number}-го уроку на {target_date.isoformat()} і так немає такої позначки.")
 
 
 # ---------- "Вас відпустили?" - питання адмінам при тривозі ----------
