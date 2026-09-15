@@ -52,6 +52,14 @@ async def cmd_now(message: Message):
     await message.answer(text)
 
 
+@dp.message(Command("today"))
+async def cmd_today(message: Message):
+    text = format_day_schedule_message("📅 Розклад на сьогодні")
+    if text is None:
+        text = "Сьогодні уроків немає (вихідний)."
+    await message.answer(text)
+
+
 @dp.message(Command("week"))
 async def cmd_week(message: Message):
     text = format_week_message()
@@ -66,6 +74,7 @@ async def cmd_help(message: Message):
         "який зараз урок.\n\n"
         "Команди:\n"
         "/now — показати поточний/наступний урок прямо зараз\n"
+        "/today — повний розклад на сьогодні\n"
         "/week — розклад на весь тиждень"
     )
     if message.chat.type == "private" and message.from_user.id in config.ADMIN_IDS:
