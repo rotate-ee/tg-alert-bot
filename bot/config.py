@@ -57,13 +57,13 @@ SCHOOL_WEEK_ANCHOR_MONDAY = os.getenv("SCHOOL_WEEK_ANCHOR_MONDAY", "").strip()
 # Чи слати повідомлення про початок/відбій тривоги в суботу і неділю.
 # За замовчуванням - ні (моніторинг у фоні продовжується, просто без
 # сповіщень у чат). true - слати як завжди, і у вихідні теж.
-NOTIFY_ALERTS_ON_WEEKENDS = os.getenv("NOTIFY_ALERTS_ON_WEEKENDS", "false").strip().lower() == "true"
+NOTIFY_ALERTS_ON_WEEKENDS = os.getenv("NOTIFY_ALERTS_ON_WEEKENDS", "true").strip().lower() == "true"
 
 # Часовий діапазон (Europe/Kyiv, ЧЧ:ММ), коли слати сповіщення про
 # тривогу/відбій у чат. Поза цим діапазоном бот мовчить (моніторинг у
 # фоні продовжується). Порожньо або "off" в обох полях - без обмежень.
-ALERT_NOTIFY_FROM = os.getenv("ALERT_NOTIFY_FROM", "10:00").strip()
-ALERT_NOTIFY_TO = os.getenv("ALERT_NOTIFY_TO", "19:00").strip()
+ALERT_NOTIFY_FROM = os.getenv("ALERT_NOTIFY_FROM", "off").strip()
+ALERT_NOTIFY_TO = os.getenv("ALERT_NOTIFY_TO", "off").strip()
 
 # Во сколько (Europe/Kyiv, ЧЧ:ММ) в очний день питати адміна, чи 7-й
 # і 8-й уроки будуть очно (замість дистанційних за замовчуванням).
