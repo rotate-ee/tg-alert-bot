@@ -632,6 +632,14 @@ async def remote_confirmation_daily():
 
 # ---------- фоновая задача: опрос статуса тревоги ----------
 
+def _level_emoji_and_label(level: str | None) -> tuple[str, str]:
+    if level == "red":
+        return "🔴", "Червона тривога (ракетна/масована загроза)"
+    if level == "yellow":
+        return "🟡", "Жовта тривога (дронова загроза)"
+    return "🔴", "Повітряна тривога"  # рівень невідомий - старий формат
+
+
 def _in_notify_window(now: datetime) -> bool:
     """Чи потрапляє поточний час у діапазон ALERT_NOTIFY_FROM..ALERT_NOTIFY_TO."""
     raw_from = config.ALERT_NOTIFY_FROM
@@ -693,14 +701,30 @@ async def watch_alerts():
                     await _try_delete(config.CHAT_ID, last_ended_message_id)
                     last_ended_message_id = None
 
-                    log.info("Тревога началась, отправляю уведомление")
+                    emoji, label = _level_emoji_and_label(alert_watcher.level)
+                    log.info("Тревога началась (рівень: %s), отправляю уведомление", alert_watcher.level)
                     sent = await bot.send_message(
                         config.CHAT_ID,
-                        f"🔴 Повітряна тривога в «{config.REGION_TITLE}»!",
+                        f"{emoji} {label} в «{config.REGION_TITLE}»!",
                     )
                     last_start_message_id = sent.message_id
                 else:
                     log.info("Тривога почалась у вихідний - сповіщення пропускаю")
+
+            elif event == "level_changed" and config.NOTIFY_ON_START:
+                if should_notify:
+                    # рівень тривоги змінився - оновлюємо повідомлення на найсвіжіше
+                    await _try_delete(config.CHAT_ID, last_start_message_id)
+
+                    emoji, label = _level_emoji_and_label(alert_watcher.level)
+                    log.info("Рівень тривоги змінився на %s, оновлюю повідомлення", alert_watcher.level)
+                    sent = await bot.send_message(
+                        config.CHAT_ID,
+                        f"⚠️ Рівень тривоги змінено: {emoji} {label} в «{config.REGION_TITLE}»!",
+                    )
+                    last_start_message_id = sent.message_id
+                else:
+                    log.info("Рівень тривоги змінився у вихідний - сповіщення пропускаю")
 
             if event == "started":
                 current, _, _, _ = find_current_and_next(datetime.now(KYIV_TZ))
