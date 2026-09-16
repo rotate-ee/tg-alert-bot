@@ -634,9 +634,9 @@ async def remote_confirmation_daily():
 
 def _level_emoji_and_label(level: str | None) -> tuple[str, str]:
     if level == "red":
-        return "🔴", "Червона тривога (ракетна/масована загроза)"
+        return "🔴", "Повітряна тривога! Червоний рівень небезпеки"
     if level == "yellow":
-        return "🟡", "Жовта тривога (дронова загроза)"
+        return "🟡", "Повітряна тривога! Жовтий рівень небезпеки"
     return "🔴", "Повітряна тривога"  # рівень невідомий - старий формат
 
 
@@ -705,7 +705,7 @@ async def watch_alerts():
                     log.info("Тревога началась (рівень: %s), отправляю уведомление", alert_watcher.level)
                     sent = await bot.send_message(
                         config.CHAT_ID,
-                        f"{emoji} {label} в «{config.REGION_TITLE}»!",
+                        f"{emoji} {label}\n«{config.REGION_TITLE}»",
                     )
                     last_start_message_id = sent.message_id
                 else:
@@ -720,7 +720,7 @@ async def watch_alerts():
                     log.info("Рівень тривоги змінився на %s, оновлюю повідомлення", alert_watcher.level)
                     sent = await bot.send_message(
                         config.CHAT_ID,
-                        f"⚠️ Рівень тривоги змінено: {emoji} {label} в «{config.REGION_TITLE}»!",
+                        f"⚠️ Рівень тривоги змінено:\n{emoji} {label}\n«{config.REGION_TITLE}»",
                     )
                     last_start_message_id = sent.message_id
                 else:
