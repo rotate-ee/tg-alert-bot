@@ -12,6 +12,7 @@ import bell_overrides
 import cancellations
 import config
 import early_end
+import extra_lessons
 import remote_overrides
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
@@ -190,6 +191,23 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
         if override:
             lesson["start"] = override["start"]
             lesson["end"] = override["end"]
+
+    # одноразові додаткові уроки (/addlesson), яких немає в schedule.json
+    for extra in extra_lessons.get_extra_lessons(today):
+        lessons = [l for l in lessons if l["number"] != extra["number"]]  # замінюємо, якщо збігається номер
+        lessons.append({
+            "number": extra["number"],
+            "name": extra["name"],
+            "start": extra["start"],
+            "end": extra["end"],
+            "remote": False,
+            "cancelled": extra["number"] in cancelled,
+            "room": None,
+        })
+
+    # сортуємо за часом початку, щоб додаткові уроки стали на своє місце
+    # (наприклад, 0-й урок раніше 11:25 з'явиться на початку списку)
+    lessons.sort(key=lambda l: l["start"] or "99:99")
 
     return lessons
 

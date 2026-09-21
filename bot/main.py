@@ -19,6 +19,7 @@ import bell_overrides
 import cancellations
 import config
 import early_end
+import extra_lessons
 import remote_overrides
 from alerts import AlertWatcher
 from lessons import (
@@ -88,6 +89,8 @@ async def cmd_help(message: Message):
             "/diag — перевірити, чи зберігаються скасування на диску\n"
             "/settime <номер> <початок> <кінець> [дата] — змінити час уроку на цей день\n"
             "/resettime <номер> [дата] — повернути стандартний час уроку\n"
+            "/addlesson <номер> <початок> <кінець> <назва> [дата] — додати позаплановий урок\n"
+            "/removelesson <номер> [дата] — прибрати доданий урок\n"
             "/endnow [номер] — позначити, що урок закінчився саме зараз\n"
             "/undoend <номер> [дата] — прибрати позначку дострокового завершення"
         )
@@ -247,6 +250,79 @@ async def cmd_settime(message: Message):
     await message.answer(
         f"✅ Час змінено: {number}-й урок «{lesson['name']}» тепер {start}–{end} ({target_date.isoformat()})"
     )
+
+
+@dp.message(Command("addlesson"))
+async def cmd_addlesson(message: Message):
+    if not _is_allowed(message):
+        return
+
+    parts = message.text.split()[1:]
+    if len(parts) < 4:
+        await message.answer(
+            "Використання: /addlesson <номер> <початок> <кінець> <назва...> [дата РРРР-ММ-ДД]\n"
+            "Приклад: /addlesson 0 10:35 11:20 Історія"
+        )
+        return
+
+    try:
+        number = int(parts[0])
+    except ValueError:
+        await message.answer("Номер уроку має бути числом. Приклад: /addlesson 0 10:35 11:20 Історія")
+        return
+
+    start = _parse_hhmm_strict(parts[1])
+    end = _parse_hhmm_strict(parts[2])
+    if start is None or end is None:
+        await message.answer("Час має бути у форматі ЧЧ:ММ. Приклад: /addlesson 0 10:35 11:20 Історія")
+        return
+
+    # решта - назва, окрім останнього слова, якщо воно схоже на дату РРРР-ММ-ДД
+    rest = parts[3:]
+    target_date = None
+    if rest and _parse_date_arg(rest[-1]) is not None and len(rest[-1]) == 10 and rest[-1].count("-") == 2:
+        target_date = _parse_date_arg(rest[-1])
+        rest = rest[:-1]
+    if target_date is None:
+        target_date = _parse_date_arg(None)  # сьогодні
+
+    name = " ".join(rest).strip()
+    if not name:
+        await message.answer("Вкажіть назву уроку. Приклад: /addlesson 0 10:35 11:20 Історія")
+        return
+
+    extra_lessons.add_extra_lesson(target_date, number, name, start, end)
+    await message.answer(
+        f"✅ Додано: {number}-й урок «{name}», {start}–{end} ({target_date.isoformat()})"
+    )
+
+
+@dp.message(Command("removelesson"))
+async def cmd_removelesson(message: Message):
+    if not _is_allowed(message):
+        return
+
+    parts = message.text.split()[1:]
+    if not parts:
+        await message.answer("Використання: /removelesson <номер> [дата РРРР-ММ-ДД]")
+        return
+
+    try:
+        number = int(parts[0])
+    except ValueError:
+        await message.answer("Номер уроку має бути числом. Приклад: /removelesson 0")
+        return
+
+    target_date = _parse_date_arg(parts[1] if len(parts) > 1 else None)
+    if target_date is None:
+        await message.answer("Невірний формат дати. Приклад: /removelesson 0 2026-09-10")
+        return
+
+    removed = extra_lessons.remove_extra_lesson(target_date, number)
+    if removed:
+        await message.answer(f"🗑 Додатковий {number}-й урок прибрано ({target_date.isoformat()})")
+    else:
+        await message.answer(f"На {target_date.isoformat()} немає додаткового {number}-го уроку.")
 
 
 @dp.message(Command("resettime"))
