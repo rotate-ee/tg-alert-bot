@@ -91,6 +91,7 @@ async def cmd_help(message: Message):
             "/resettime <номер> [дата] — повернути стандартний час уроку\n"
             "/addlesson <номер> <початок> <кінець> <назва> [дата] — додати позаплановий урок\n"
             "/removelesson <номер> [дата] — прибрати доданий урок\n"
+            "/announce <текст> — надіслати оголошення в груповий чат\n"
             "/endnow [номер] — позначити, що урок закінчився саме зараз\n"
             "/undoend <номер> [дата] — прибрати позначку дострокового завершення"
         )
@@ -323,6 +324,21 @@ async def cmd_removelesson(message: Message):
         await message.answer(f"🗑 Додатковий {number}-й урок прибрано ({target_date.isoformat()})")
     else:
         await message.answer(f"На {target_date.isoformat()} немає додаткового {number}-го уроку.")
+
+
+@dp.message(Command("announce"))
+async def cmd_announce(message: Message):
+    if not _is_allowed(message):
+        return
+
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await message.answer("Використання: /announce <текст оголошення>\nПриклад: /announce Завтра урок фізкультури скасовано")
+        return
+
+    text = parts[1].strip()
+    await bot.send_message(config.CHAT_ID, f"📢 {text}")
+    await message.answer("✅ Надіслано в чат")
 
 
 @dp.message(Command("resettime"))
