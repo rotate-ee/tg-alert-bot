@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Розклад</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:var(--tg-theme-bg-color,#fff);--tx:var(--tg-theme-text-color,#111);--hint:var(--tg-theme-hint-color,#777);--card:var(--tg-theme-secondary-bg-color,#f1f1f4);--btn:var(--tg-theme-button-color,#2481cc);--btx:var(--tg-theme-button-text-color,#fff)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 -apple-system,system-ui,Roboto,sans-serif;padding:12px 12px 80px}
+h1{font-size:20px;margin:4px 0 2px}
+.sub{color:var(--hint);font-size:13px;margin-bottom:12px}
+.tabs{display:flex;gap:6px;background:var(--card);padding:4px;border-radius:12px;margin-bottom:12px}
+.tabs button{flex:1;border:0;background:none;color:var(--tx);padding:8px;border-radius:9px;font-size:15px}
+.tabs button.on{background:var(--btn);color:var(--btx)}
+.card{background:var(--card);border-radius:14px;padding:12px 14px;margin-bottom:8px;display:flex;gap:12px;align-items:center}
+.card.now{outline:2px solid var(--btn)}
+.card.past{opacity:.5}
+.n{width:30px;height:30px;border-radius:50%;background:var(--btn);color:var(--btx);display:grid;place-items:center;font-weight:600;flex:none}
+.t{flex:1}.t b{display:block}.t span{color:var(--hint);font-size:13px}
+.tag{font-size:12px;color:var(--hint)}
+.big{text-align:center;padding:22px 14px}
+.big .tt{font-size:22px;font-weight:700;margin:4px 0}
+.day{font-weight:600;margin:14px 2px 6px}
+.day.today{color:var(--btn)}
+.empty{color:var(--hint);text-align:center;padding:30px 0}
+.nav{display:flex;gap:8px;margin-bottom:10px}
+.nav button{flex:1;border:0;background:var(--card);color:var(--tx);padding:8px;border-radius:10px;font-size:14px}
+</style>
+</head>
+<body>
+<h1 id="h">Розклад</h1>
+<div class="sub" id="sub"></div>
+<div class="tabs" id="tabs">
+  <button data-t="now" class="on">Зараз</button>
+  <button data-t="today">Сьогодні</button>
+  <button data-t="week">Тиждень</button>
+</div>
+<div id="nav" class="nav" style="display:none"></div>
+<div id="out"></div>
+
+<script>
+const S = {
+ bells:{"1":["11:25","12:10"],"2":["12:25","13:10"],"3":["13:25","14:10"],"4":["14:15","15:00"],"5":["15:05","15:50"],"6":["15:55","16:40"],"7":["17:05","17:50"],"8":["17:55","18:40"]},
+ remote:[7,8],
+ days:{
+  0:["Математика","Англ. мова","Укр. мова","Укр. літ","Хімія","Фіз-ра","Історія"],
+  1:["Правознавство","Укр. мова","Біологія","Зар. літ","Інформатика",{"1_2":"Мистецтво","3_4":"Музика"},"ЗБД",{"3_4":"Підприємництво"}],
+  2:["Фізика","Англ. мова",{"1_2":"Громадянська освіта","3_4":"Історія"},"Географія","Укр. літ","Математика","Математика"],
+  3:["Фіз-ра","Зар. літ","Математика","Хімія","Фізика","Інформатика","Технології"],
+  4:["Фіз-ра","Історія","Біологія","Фізика","Укр. мова","Математика","Англ. мова"],5:[],6:[]},
+ rooms:{
+  0:["303","318","316","316","325",null,"304"],
+  1:["309","316","321","325","310",{"1_2":"222","3_4":"206"},"304",{"3_4":"314"}],
+  2:["206","318","304","314","316","303","303"],
+  3:[null,"222","303","325","210","310","103/101"],
+  4:[null,"304","321","202","316","303","318"],5:[],6:[]},
+ anchor:"2026-09-07" // понеділок очного тижня (SCHOOL_WEEK_ANCHOR_MONDAY)
+};
+const DN=["Понеділок","Вівторок","Середа","Четвер","П'ятниця","Субота","Неділя"];
+const tg=window.Telegram&&Telegram.WebApp; if(tg){tg.ready();tg.expand();}
+
+// поточний час за Києвом
+function kyiv(){
+ const p=Object.fromEntries(new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Kyiv",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}).formatToParts(new Date()).map(x=>[x.type,x.value]));
+ return new Date(Date.UTC(+p.year,+p.month-1,+p.day,+p.hour%24,+p.minute));
+}
+const wd=d=>(d.getUTCDay()+6)%7;
+const group=d=>(Math.floor((d.getUTCDate()-1)/7)+1)<=2?"1_2":"3_4";
+function isSchool(d){
+ const mon=new Date(d.getTime()-wd(d)*864e5);
+ const a=new Date(S.anchor+"T00:00:00Z");
+ return Math.floor((Date.UTC(mon.getUTCFullYear(),mon.getUTCMonth(),mon.getUTCDate())-a.getTime())/864e5/7)%2===0;
+}
+const pick=(e,g)=>e&&typeof e==="object"?e[g]||null:e;
+function lessons(d){
+ const w=wd(d),g=group(d),school=isSchool(d),out=[];
+ (S.days[w]||[]).forEach((e,i)=>{
+  const name=pick(e,g); if(!name) return;
+  const n=i+1, remote=S.remote.includes(n)&&!school?false:S.remote.includes(n);
+  const room=(school&&!S.remote.includes(n))?pick((S.rooms[w]||[])[i],g):null;
+  out.push({n,name,room,remote:S.remote.includes(n)&&school,start:S.bells[n][0],end:S.bells[n][1]});
+ });
+ return out;
+}
+const mins=s=>{const[a,b]=s.split(":");return +a*60+ +b};
+const card=(l,cls="")=>`<div class="card ${cls}"><div class="n">${l.n}</div><div class="t"><b>${l.name}</b><span>${l.start}–${l.end}${l.room?" · каб. "+l.room:""}</span></div>${l.remote?'<span class="tag">дист.</span>':""}</div>`;
+
+let tab="now", off=0;
+function render(){
+ const now=kyiv(), cur=now.getUTCHours()*60+now.getUTCMinutes();
+ const school=isSchool(now);
+ document.getElementById("sub").textContent=`${DN[wd(now)]}, ${now.getUTCDate().toString().padStart(2,"0")}.${(now.getUTCMonth()+1).toString().padStart(2,"0")} · ${school?"🏫 очний тиждень":"🏠 вдома"}`;
+ const nav=document.getElementById("nav"), out=document.getElementById("out");
+ nav.style.display=tab==="week"?"flex":"none";
+ if(tab==="now"){
+  const L=lessons(now), c=L.find(l=>cur>=mins(l.start)&&cur<mins(l.end)), nx=L.find(l=>mins(l.start)>cur);
+  let h="";
+  if(c) h+=`<div class="card big now" style="display:block"><span class="tag">Зараз</span><div class="tt">${c.n}. ${c.name}</div><span class="tag">${c.start}–${c.end}${c.room?" · каб. "+c.room:""} · ще ${mins(c.end)-cur} хв</span></div>`;
+  else h+=`<div class="card big" style="display:block"><div class="tt">${L.length?"Зараз уроку немає":"Сьогодні уроків немає"}</div></div>`;
+  if(nx) h+=`<div class="day">Наступний</div>`+card(nx);
+  out.innerHTML=h;
+ } else if(tab==="today"){
+  const L=lessons(now);
+  out.innerHTML=L.length?L.map(l=>card(l,cur>=mins(l.end)?"past":(cur>=mins(l.start)?"now":""))).join(""):'<div class="empty">Сьогодні уроків немає 🎉</div>';
+ } else {
+  const mon=new Date(now.getTime()-wd(now)*864e5+off*7*864e5);
+  nav.innerHTML=`<button onclick="off--;render()">←</button><button onclick="off=0;render()">${isSchool(mon)?"🏫":"🏠"} ${off?"до цього":"цей тиждень"}</button><button onclick="off++;render()">→</button>`;
+  let h="";
+  for(let i=0;i<5;i++){
+   const d=new Date(mon.getTime()+i*864e5), L=lessons(d), t=d.getTime()===new Date(now.getTime()-(cur%1440)*6e4).getTime();
+   h+=`<div class="day ${t?"today":""}">${DN[i]} ${d.getUTCDate()}.${String(d.getUTCMonth()+1).padStart(2,"0")}</div>`+(L.length?L.map(l=>card(l)).join(""):'<div class="empty">—</div>');
+  }
+  out.innerHTML=h;
+ }
+}
+document.getElementById("tabs").onclick=e=>{
+ const b=e.target.closest("button"); if(!b) return;
+ tab=b.dataset.t; off=0;
+ [...document.querySelectorAll("#tabs button")].forEach(x=>x.classList.toggle("on",x===b));
+ render();
+};
+render(); setInterval(render,30000);
+</script>
+</body>
+</html>

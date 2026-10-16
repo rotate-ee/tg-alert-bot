@@ -7,13 +7,21 @@ Telegram-бот: знает расписание уроков класса и п
 """
 import asyncio
 import logging
+import os
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import aiohttp
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    MenuButtonWebApp,
+    Message,
+    WebAppInfo,
+)
 
 import bell_overrides
 import cancellations
@@ -39,6 +47,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("main")
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
+
+# URL міні-застосунку (HTTPS). Порожньо - команда /app вимкнена.
+MINIAPP_URL = os.getenv("MINIAPP_URL", "").strip()
 
 bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher()
@@ -78,6 +89,7 @@ async def cmd_help(message: Message):
         "/now — показати поточний/наступний урок прямо зараз\n"
         "/today — повний розклад на сьогодні\n"
         "/week — розклад на весь тиждень"
+        + ("\n/app — відкрити розклад у міні-застосунку" if MINIAPP_URL else "")
     )
     if message.chat.type == "private" and message.from_user.id in config.ADMIN_IDS:
         text += (
@@ -96,6 +108,20 @@ async def cmd_help(message: Message):
             "/undoend <номер> [дата] — прибрати позначку дострокового завершення"
         )
     await message.answer(text)
+
+
+@dp.message(Command("app"))
+async def cmd_app(message: Message):
+    if not MINIAPP_URL:
+        await message.answer("Міні-застосунок не налаштовано (MINIAPP_URL).")
+        return
+    if message.chat.type != "private":
+        await message.answer("Відкрийте міні-застосунок в особистих повідомленнях з ботом: /app")
+        return
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="📅 Відкрити розклад", web_app=WebAppInfo(url=MINIAPP_URL))
+    ]])
+    await message.answer("Розклад у міні-застосунку:", reply_markup=kb)
 
 
 # ---------- команды отмены уроков (только в ЛС, только для админов) ----------
@@ -833,6 +859,13 @@ async def main():
     asyncio.create_task(lesson_reminders())
     asyncio.create_task(week_type_sunday_reminder())
     asyncio.create_task(remote_confirmation_daily())
+    if MINIAPP_URL:
+        try:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(text="Розклад", web_app=WebAppInfo(url=MINIAPP_URL))
+            )
+        except Exception:
+            log.exception("Не вдалося встановити кнопку меню міні-застосунку")
     log.info("Бот запущен, слежу за регионом: %s", config.REGION_TITLE)
     await dp.start_polling(bot)
 
