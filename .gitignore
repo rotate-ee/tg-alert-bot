@@ -14,3 +14,7 @@ venv/
 
 # Рантайм-данные (список отменённых уроков) - не часть кода
 bot/data/
+
+node_modules/
+tools/node_modules/
+.pytest_cache/

@@ -78,3 +78,12 @@ LESSON_REMINDER_MINUTES = None if _reminder_raw.lower() in ("off", "0", "") else
 # повідомлення адмінам про тип наступного тижня (школа/вдома).
 # Працює тільки якщо налаштовано SCHOOL_WEEK_ANCHOR_MONDAY. "off" - вимкнути.
 WEEK_TYPE_REMINDER_TIME = os.getenv("WEEK_TYPE_REMINDER_TIME", "19:00").strip()
+
+# ---- Mini App (веб-застосунок усередині Telegram) ----
+# Публічна HTTPS-адреса, за якою доступний бот (її дає хостинг, напр.
+# https://my-bot.up.railway.app). Порожньо - Mini App вимкнено.
+WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip().rstrip("/")
+# Порт вбудованого веб-сервера (Railway/Fly самі задають змінну PORT).
+WEBAPP_PORT = int(os.getenv("PORT") or os.getenv("WEBAPP_PORT") or "8080")
+# Пускати в застосунок тільки учасників CHAT_ID (адміни - завжди).
+WEBAPP_REQUIRE_MEMBERSHIP = os.getenv("WEBAPP_REQUIRE_MEMBERSHIP", "true").strip().lower() == "true"

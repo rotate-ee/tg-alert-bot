@@ -66,18 +66,22 @@ def format_lesson_time(lesson: dict, d: date) -> str:
     return f"{base} (дистанційно)" if is_lesson_remote_today(lesson, d) else base
 
 
+def visible_room(lesson: dict, d: date) -> str | None:
+    """Кабінет, який варто показувати, або None (немає / урок дистанційний / тиждень вдома)."""
+    if not lesson["room"] or is_lesson_remote_today(lesson, d):
+        return None
+    if is_school_week(d) is False:
+        return None
+    return lesson["room"]
+
+
 def format_lesson_room(lesson: dict, d: date) -> str:
     """
-    ", каб. 303" - якщо є кабінет, урок не вважається дистанційним
-    сьогодні (див. is_lesson_remote_today) і тиждень очний.
+    ", каб. 303" - якщо є що показувати (див. visible_room).
     Порожній рядок - якщо кабінет показувати не треба.
     """
-    if not lesson["room"] or is_lesson_remote_today(lesson, d):
-        return ""
-    school = is_school_week(d)
-    if school is False:
-        return ""
-    return f", каб. {lesson['room']}"
+    room = visible_room(lesson, d)
+    return f", каб. {room}" if room else ""
 
 
 def week_group(now: datetime) -> str:

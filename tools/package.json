@@ -1,0 +1,6 @@
+{
+  "name": "tg-alert-bot-tools",
+  "private": true,
+  "description": "Опційно: димова перевірка інтерфейсу Mini App (потрібен Node 18+)",
+  "devDependencies": { "jsdom": "^26.0.0" }
+}

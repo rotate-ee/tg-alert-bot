@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Розклад</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root {
+  --bg: var(--tg-theme-bg-color, #ffffff);
+  --text: var(--tg-theme-text-color, #16181d);
+  --hint: var(--tg-theme-hint-color, #7d8590);
+  --card: var(--tg-theme-secondary-bg-color, #f1f3f6);
+  --accent: var(--tg-theme-button-color, #2481cc);
+  --accent-text: var(--tg-theme-button-text-color, #ffffff);
+  --yellow: #d9a400;
+  --red: #e5484d;
+  --green: #2f9e6b;
+  --line: rgba(127, 127, 127, .22);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: var(--tg-theme-bg-color, #17212b);
+    --text: var(--tg-theme-text-color, #f2f4f7);
+    --card: var(--tg-theme-secondary-bg-color, #232e3c);
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.page { padding: 12px 12px calc(76px + env(safe-area-inset-bottom)); max-width: 640px; margin: 0 auto; }
+.center { padding: 60px 20px; text-align: center; color: var(--hint); }
+.center h2 { color: var(--text); margin: 0 0 8px; }
+h3 { margin: 18px 4px 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--hint); font-weight: 600; }
+
+/* банер тривоги */
+.banner { border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; color: #fff; }
+.banner.g { background: var(--green); }
+.banner.y { background: var(--yellow); color: #1a1500; }
+.banner.r { background: var(--red); }
+.b-title { font-weight: 700; font-size: 16px; }
+.b-sub { opacity: .9; font-size: 13px; margin-top: 2px; }
+
+.chips-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+.badge { background: var(--card); border-radius: 999px; padding: 5px 11px; font-size: 13px; }
+
+/* картка "зараз" */
+.now { background: var(--card); border-radius: 16px; padding: 14px 16px; margin-bottom: 6px; }
+.now-label { color: var(--hint); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.now-title { font-size: 19px; font-weight: 700; margin: 3px 0; }
+.now-sub { color: var(--hint); }
+.bar { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 10px 0 6px; }
+.bar > i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.left { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* уроки */
+.card { background: var(--card); border-radius: 16px; padding: 4px 0; margin-bottom: 10px; }
+.day-head { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 14px 4px; font-weight: 700; }
+.day-head small { color: var(--hint); font-weight: 400; }
+.day-head.today { color: var(--accent); }
+.lesson { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center;
+  padding: 9px 14px; border-top: 1px solid var(--line); }
+.card > .lesson:first-of-type, .day-head + .lesson { border-top: 0; }
+.lesson.tappable { cursor: pointer; }
+.lesson.tappable:active { background: var(--line); }
+.lesson.current { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.lesson.past { opacity: .5; }
+.lesson.cancelled .name { text-decoration: line-through; opacity: .65; }
+.num { width: 30px; height: 30px; border-radius: 50%; background: var(--bg); display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+.current .num { background: var(--accent); color: var(--accent-text); }
+.name { font-weight: 600; }
+.meta { color: var(--hint); font-size: 13px; font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.chip { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--bg); color: var(--hint); white-space: nowrap; }
+.chip.warn { background: color-mix(in srgb, var(--red) 18%, transparent); color: var(--red); }
+.chip.info { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.chip.ok { background: color-mix(in srgb, var(--green) 20%, transparent); color: var(--green); }
+.empty { color: var(--hint); padding: 14px; text-align: center; }
+
+/* навігація тижнем */
+.weeknav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.weeknav .title { text-align: center; font-weight: 700; }
+.weeknav .title small { display: block; color: var(--hint); font-weight: 400; }
+
+/* статистика */
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat { background: var(--card); border-radius: 16px; padding: 12px 14px; }
+.stat .big { font-size: 22px; font-weight: 700; }
+.stat .lbl { color: var(--hint); font-size: 12px; }
+.sess { display: flex; justify-content: space-between; padding: 9px 14px; border-top: 1px solid var(--line); }
+.sess:first-child { border-top: 0; }
+
+/* форми і кнопки */
+.btn { display: block; width: 100%; border: 0; border-radius: 12px; padding: 12px; font: inherit; font-weight: 600;
+  background: var(--accent); color: var(--accent-text); margin-top: 8px; cursor: pointer; }
+.btn.plain { background: var(--bg); color: var(--text); border: 1px solid var(--line); }
+.btn.danger { background: var(--red); color: #fff; }
+.btn.ghost { background: transparent; color: var(--hint); }
+.btn:disabled { opacity: .5; }
+input, textarea { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px; margin-top: 6px; }
+textarea { resize: vertical; min-height: 84px; }
+.row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.row > * { margin-top: 0; }
+.field { margin-top: 8px; }
+.field label { color: var(--hint); font-size: 12px; }
+.form { background: var(--card); border-radius: 16px; padding: 12px 14px 14px; margin-bottom: 10px; }
+.check { display: flex; gap: 8px; align-items: center; margin-top: 10px; color: var(--hint); }
+.check input { width: auto; margin: 0; }
+
+/* нижня панель вкладок */
+.tabbar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: var(--bg);
+  border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+.tab { flex: 1; border: 0; background: none; color: var(--hint); font: inherit; font-size: 11px; padding: 8px 2px 9px; cursor: pointer; }
+.tab span { display: block; font-size: 20px; line-height: 1.2; }
+.tab.on { color: var(--accent); font-weight: 700; }
+
+/* шторка дій */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; z-index: 10; }
+.sheet { width: 100%; max-width: 640px; margin: 0 auto; background: var(--bg); border-radius: 20px 20px 0 0;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); max-height: 88vh; overflow-y: auto; }
+.sheet-title { font-size: 18px; font-weight: 700; }
+.sheet-sub { color: var(--hint); margin-bottom: 6px; }
+.toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  background: #222; color: #fff; padding: 9px 16px; border-radius: 99px; font-size: 14px; z-index: 20; }
+.offline { background: color-mix(in srgb, var(--yellow) 25%, transparent); border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  'use strict';
+  var tg = (window.Telegram && window.Telegram.WebApp) || null;
+  if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
+
+  var WD = ['Понеділок', 'Вівторок', 'Середа', 'Четвер', "П'ятниця", 'Субота', 'Неділя'];
+  var S = { data: null, tab: 'today', weekOffset: 0, stats: null, error: null, offline: false,
+            baseSecs: 0, baseAbsMs: 0, baseAt: 0, sheet: null, busy: false };
+
+  /* ---------- допоміжне ---------- */
+  function h(tag, attrs) {
+    var e = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) return;
+      if (k === 'class') e.className = v;
+      else if (k === 'text') e.textContent = v;
+      else if (k === 'value') e.value = v;
+      else if (k.indexOf('on') === 0) e.addEventListener(k.slice(2).toLowerCase(), v);
+      else e.setAttribute(k, v === true ? '' : v);
+    });
+    var kids = Array.prototype.slice.call(arguments, 2);
+    (function add(list) {
+      list.forEach(function (c) {
+        if (c === null || c === undefined || c === false) return;
+        if (Array.isArray(c)) return add(c);
+        e.appendChild(c.nodeType ? c : document.createTextNode(String(c)));
+      });
+    })(kids);
+    return e;
+  }
+  function clear(e) { while (e.firstChild) e.removeChild(e.firstChild); return e; }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function hm(s) { var p = s.split(':'); return (+p[0]) * 3600 + (+p[1]) * 60; }
+  function fmtDate(iso) { return iso.slice(8, 10) + '.' + iso.slice(5, 7); }
+  function fmtDur(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    var hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60);
+    if (hh) return hh + ' год ' + pad(mm) + ' хв';
+    if (mm) return mm + ' хв';
+    return sec + ' с';
+  }
+  function fmtLeft(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    var hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60), ss = sec % 60;
+    return (hh ? hh + ':' + pad(mm) : mm) + ':' + pad(ss);
+  }
+  function isoDate(d) { return d.toISOString().slice(0, 10); }
+  function addDays(iso, n) { var d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return isoDate(d); }
+  function mondayOf(iso) { var d = new Date(iso + 'T00:00:00Z'); return addDays(iso, -((d.getUTCDay() + 6) % 7)); }
+  function curSecs() { return S.baseSecs + (performance.now() - S.baseAt) / 1000; }
+  function absNow() { return S.baseAbsMs + (performance.now() - S.baseAt); }
+  function endOf(l) { return hm(l.early_end || l.end); }
+  function haptic(kind) { try { tg && tg.HapticFeedback && tg.HapticFeedback.notificationOccurred(kind); } catch (e) {} }
+  function say(msg) { if (tg && tg.showAlert) { try { return tg.showAlert(msg); } catch (e) {} } window.alert(msg); }
+  function ask(msg, ok) {
+    if (tg && tg.showConfirm) { try { return tg.showConfirm(msg, function (y) { if (y) ok(); }); } catch (e) {} }
+    if (window.confirm(msg)) ok();
+  }
+  function toast(msg) {
+    var t = h('div', { class: 'toast', text: msg });
+    document.body.appendChild(t);
+    setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 1800);
+  }
+
+  /* ---------- мережа ---------- */
+  function api(path, body) {
+    var init = { method: body ? 'POST' : 'GET', headers: { 'Authorization': 'tma ' + ((tg && tg.initData) || '') } };
+    if (body) { init.headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(body); }
+    return fetch(path, init).then(function (r) {
+      return r.json().catch(function () { return null; }).then(function (data) {
+        if (!r.ok) { var err = new Error((data && data.error) || ('HTTP ' + r.status)); err.status = r.status; throw err; }
+        return data;
+      });
+    });
+  }
+  function refresh() {
+    return api('/api/state').then(function (d) {
+      S.data = d; S.error = null; S.offline = false;
+      S.baseSecs = d.now_secs; S.baseAbsMs = Date.parse(d.now); S.baseAt = performance.now();
+      if (S.tab === 'alerts') return loadStats();
+    }).catch(function (e) {
+      if (e.status === 401 || e.status === 403) { S.error = e; S.data = null; } else { S.offline = true; }
+    }).then(render);
+  }
+  function loadStats() { return api('/api/stats').then(function (s) { S.stats = s; }).catch(function () {}); }
+  function act(path, body) {
+    if (S.busy) return Promise.resolve(false);
+    S.busy = true;
+    return api(path, body).then(function () {
+      haptic('success'); toast('Готово'); closeSheet(); return refresh().then(function () { return true; });
+    }).catch(function (e) { haptic('error'); say(e.message); return false; })
+      .then(function (ok) { S.busy = false; return ok; });
+  }
+
+  /* ---------- обчислення "зараз" ---------- */
+  function todayDay() { return S.data.days.filter(function (d) { return d.date === S.data.today; })[0] || null; }
+  function computeNow(day, cs) {
+    var cur = null, next = null;
+    day.lessons.forEach(function (l) {
+      if (l.cancelled || !l.start) return;
+      if (hm(l.start) <= cs && cs <= endOf(l)) cur = l;
+      else if (hm(l.start) > cs && !next) next = l;
+    });
+    return { cur: cur, next: next };
+  }
+
+  /* ---------- компоненти ---------- */
+  function chip(text, kind) { return h('span', { class: 'chip ' + (kind || ''), text: text }); }
+  function weekBadge(type) {
+    if (!type) return null;
+    return h('span', { class: 'badge', text: type === 'school' ? '🏫 Очний тиждень' : '🏠 Тиждень вдома' });
+  }
+
+  function renderAlert(box) {
+    var a = S.data.alert; clear(box);
+    if (!a.active) {
+      box.className = 'banner g js-alert';
+      box.appendChild(h('div', { class: 'b-title', text: '🟢 Тривоги немає' }));
+      box.appendChild(h('div', { class: 'b-sub', text: S.data.region }));
+      return;
+    }
+    var title = a.level === 'red' ? '🔴 Повітряна тривога! Червоний рівень небезпеки'
+              : a.level === 'yellow' ? '🟡 Повітряна тривога! Жовтий рівень небезпеки' : '🔴 Повітряна тривога';
+    box.className = 'banner js-alert ' + (a.level === 'yellow' ? 'y' : 'r');
+    box.appendChild(h('div', { class: 'b-title', text: title }));
+    var sub = S.data.region;
+    if (a.since) sub += ' · триває ' + fmtDur((absNow() - Date.parse(a.since)) / 1000);
+    box.appendChild(h('div', { class: 'b-sub', text: sub }));
+  }
+
+  function renderNowCard(box) {
+    clear(box);
+    var day = todayDay();
+    box.appendChild(h('div', { class: 'now-label', text: 'Зараз' }));
+    if (!day || !day.lessons.length) {
+      box.appendChild(h('div', { class: 'now-title', text: 'Сьогодні уроків немає' }));
+      var nd = S.data.days.filter(function (d) { return d.date > S.data.today && d.lessons.length; })[0];
+      if (nd) box.appendChild(h('div', { class: 'now-sub', text: 'Найближчі уроки: ' + nd.weekday_name + ', ' + fmtDate(nd.date) }));
+      return;
+    }
+    var cs = curSecs(), r = computeNow(day, cs);
+    if (r.cur) {
+      var l = r.cur, s = hm(l.start), e = endOf(l);
+      var pct = Math.min(100, Math.max(0, (cs - s) / (e - s) * 100));
+      box.appendChild(h('div', { class: 'now-title', text: l.number + '. ' + l.name }));
+      box.appendChild(h('div', { class: 'now-sub', text: l.start + '–' + (l.early_end || l.end) + (l.room ? ' · каб. ' + l.room : '') + (l.remote ? ' · дистанційно' : '') }));
+      box.appendChild(h('div', { class: 'bar' }, h('i', { style: 'width:' + pct.toFixed(1) + '%' })));
+      box.appendChild(h('div', { class: 'now-sub' }, 'До кінця: ', h('span', { class: 'left', text: fmtLeft(e - cs) })));
+    } else if (r.next) {
+      var n = r.next;
+      box.appendChild(h('div', { class: 'now-title', text: 'Перерва' }));
+      box.appendChild(h('div', { class: 'now-sub' }, 'Далі: ' + n.number + '. ' + n.name + ' о ' + n.start + ' (через ',
+        h('span', { class: 'left', text: fmtLeft(hm(n.start) - cs) }), ')' + (n.room ? ' · каб. ' + n.room : '')));
+    } else {
+      box.appendChild(h('div', { class: 'now-title', text: 'Уроки на сьогодні закінчились' }));
+    }
+  }
+
+  function lessonRow(day, l, cs) {
+    var cls = ['lesson'];
+    var isToday = day.date === S.data.today;
+    if (l.cancelled) cls.push('cancelled');
+    if (isToday && !l.cancelled && l.start && hm(l.start) <= cs && cs <= endOf(l)) cls.push('current');
+    else if (isToday && l.end && endOf(l) < cs) cls.push('past');
+    if (S.data.is_admin) cls.push('tappable');
+    var chips = [];
+    if (l.cancelled_label) chips.push(chip(l.cancelled_label, 'warn'));
+    if (l.remote) chips.push(chip('дистанційно', 'info'));
+    if (l.in_person_confirmed) chips.push(chip('очно ✓', 'ok'));
+    if (l.early_end) chips.push(chip('закінчився о ' + l.early_end, ''));
+    if (l.bell_override) chips.push(chip('час змінено', ''));
+    if (l.extra) chips.push(chip('додатковий', ''));
+    var meta = (l.start ? l.start + '–' + l.end : '—') + (l.room ? ' · каб. ' + l.room : '');
+    return h('div', { class: cls.join(' '), onclick: S.data.is_admin ? function () { openSheet(day, l); } : null },
+      h('div', { class: 'num', text: String(l.number) }),
+      h('div', null, h('div', { class: 'name', text: l.name }), h('div', { class: 'meta', text: meta })),
+      h('div', { class: 'chips' }, chips));
+  }
+
+  function dayCard(day) {
+    var isToday = day.date === S.data.today;
+    var card = h('div', { class: 'card' },
+      h('div', { class: 'day-head' + (isToday ? ' today' : '') },
+        h('span', { text: day.weekday_name + (isToday ? ' · сьогодні' : '') }),
+        h('small', { text: fmtDate(day.date) })));
+    if (!day.lessons.length) card.appendChild(h('div', { class: 'empty', text: 'Уроків немає' }));
+    var cs = curSecs();
+    day.lessons.forEach(function (l) { card.appendChild(lessonRow(day, l, cs)); });
+    return card;
+  }
+
+  /* ---------- вкладки ---------- */
+  function viewToday() {
+    var wrap = h('div');
+    wrap.appendChild(h('div', { class: 'banner js-alert' }));
+    var day = todayDay();
+    var chips = h('div', { class: 'chips-row' }, weekBadge(day && day.week_type),
+      h('span', { class: 'badge', text: day ? day.weekday_name + ', ' + fmtDate(day.date) : '' }));
+    wrap.appendChild(chips);
+    wrap.appendChild(h('div', { class: 'now', id: 'nowcard' }));
+    wrap.appendChild(h('h3', { text: 'Розклад на сьогодні' }));
+    if (day) wrap.appendChild(dayCard(day));
+    return wrap;
+  }
+
+  function viewWeek() {
+    var wrap = h('div');
+    var monday = addDays(mondayOf(S.data.today), S.weekOffset * 7);
+    var days = S.data.days.filter(function (d) { return d.date >= monday && d.date <= addDays(monday, 6); });
+    var type = days.length ? days[0].week_type : null;
+    wrap.appendChild(h('div', { class: 'weeknav' },
+      h('button', { class: 'btn plain', style: 'width:auto;margin:0;padding:8px 14px', text: '‹', disabled: S.weekOffset <= -1,
+        onclick: function () { S.weekOffset--; render(); } }),
+      h('div', { class: 'title' }, fmtDate(monday) + ' – ' + fmtDate(addDays(monday, 6)),
+        h('small', { text: type === 'school' ? '🏫 Очний тиждень' : type === 'home' ? '🏠 Тиждень вдома' : ' ' })),
+      h('button', { class: 'btn plain', style: 'width:auto;margin:0;padding:8px 14px', text: '›', disabled: S.weekOffset >= 1,
+        onclick: function () { S.weekOffset++; render(); } })));
+    var shown = days.filter(function (d) { return d.lessons.length || d.weekday < 5; });
+    shown.forEach(function (d) { wrap.appendChild(dayCard(d)); });
+    if (!shown.length) wrap.appendChild(h('div', { class: 'empty', text: 'Немає даних за цей тиждень' }));
+    return wrap;
+  }
+
+  function levelIcon(level) { return level === 'red' ? '🔴' : level === 'yellow' ? '🟡' : '⚪'; }
+  function statCard(title, st) {
+    return h('div', { class: 'stat' },
+      h('div', { class: 'lbl', text: title }),
+      h('div', { class: 'big', text: String(st.count) }),
+      h('div', { class: 'lbl', text: st.count ? 'разом ' + fmtDur(st.total_seconds) + ' · найдовша ' + fmtDur(st.longest_seconds) : 'тривог не було' }));
+  }
+  function viewAlerts() {
+    var wrap = h('div');
+    wrap.appendChild(h('div', { class: 'banner js-alert' }));
+    if (!S.stats) { wrap.appendChild(h('div', { class: 'empty', text: 'Завантаження…' })); return wrap; }
+    wrap.appendChild(h('h3', { text: 'Статистика' }));
+    wrap.appendChild(h('div', { class: 'stats' }, statCard('Цей тиждень', S.stats.week), statCard('Цей місяць', S.stats.month)));
+    wrap.appendChild(h('h3', { text: 'Останні тривоги' }));
+    var card = h('div', { class: 'card' });
+    if (!S.stats.recent.length) card.appendChild(h('div', { class: 'empty', text: 'Історія почне збиратися з моменту запуску бота' }));
+    S.stats.recent.forEach(function (s) {
+      var st = s.start;
+      card.appendChild(h('div', { class: 'sess' },
+        h('span', { text: levelIcon(s.level) + ' ' + fmtDate(st) + ' ' + st.slice(11, 16) + (s.end ? '–' + s.end.slice(11, 16) : ' · триває') }),
+        h('span', { class: 'meta', text: fmtDur(s.duration_seconds) })));
+    });
+    wrap.appendChild(card);
+    return wrap;
+  }
+
+  function viewAdmin() {
+    if (S.adminEl) return S.adminEl;  // будуємо один раз - щоб фонове оновлення не стирало введений текст
+    var wrap = h('div');
+    S.adminEl = wrap;
+    wrap.appendChild(h('div', { class: 'form' },
+      h('b', { text: 'Дії з уроками' }),
+      h('div', { class: 'now-sub', text: 'Натисніть на будь-який урок у вкладці «Сьогодні» або «Тиждень», щоб скасувати його, змінити час тощо.' }),
+      h('button', { class: 'btn plain', type: 'button', text: '⏹ Поточний урок закінчився зараз', onclick: function () {
+        var day = todayDay(), r = day ? computeNow(day, curSecs()) : { cur: null };
+        if (!r.cur) return toast('Зараз немає активного уроку');
+        act('/api/admin/endnow', { number: r.cur.number });
+      } })));
+
+    var ta = h('textarea', { placeholder: 'Текст оголошення для класного чату…', maxlength: '1000' });
+    wrap.appendChild(h('div', { class: 'form' }, h('b', { text: '📢 Оголошення в чат' }), ta,
+      h('button', { class: 'btn', type: 'button', text: 'Надіслати', onclick: function () {
+        var text = ta.value.trim();
+        if (!text) return toast('Введіть текст');
+        ask('Надіслати оголошення в чат?', function () { act('/api/admin/announce', { text: text }).then(function (ok) { if (ok) ta.value = ''; }); });
+      } })));
+
+    var fDate = h('input', { type: 'date', value: S.data.today }), fNum = h('input', { type: 'number', value: '0', min: '0', max: '30' });
+    var fName = h('input', { type: 'text', placeholder: 'Назва, напр. Історія', maxlength: '60' });
+    var fStart = h('input', { type: 'time' }), fEnd = h('input', { type: 'time' });
+    wrap.appendChild(h('div', { class: 'form' }, h('b', { text: '➕ Позаплановий урок' }),
+      h('div', { class: 'field' }, h('label', { text: 'Дата' }), fDate),
+      h('div', { class: 'field' }, h('label', { text: 'Номер' }), fNum),
+      h('div', { class: 'field' }, h('label', { text: 'Назва' }), fName),
+      h('div', { class: 'row' }, fStart, h('span', { text: '–' }), fEnd),
+      h('button', { class: 'btn', type: 'button', text: 'Додати урок', onclick: function () {
+        if (!fName.value.trim() || !fStart.value || !fEnd.value) return toast('Заповніть назву та час');
+        act('/api/admin/addlesson', { date: fDate.value, number: +fNum.value, name: fName.value.trim(), start: fStart.value, end: fEnd.value });
+      } })));
+    return wrap;
+  }
+
+  /* ---------- шторка дій над уроком ---------- */
+  function btn(label, kind, fn) { return h('button', { class: 'btn ' + (kind || ''), type: 'button', text: label, onclick: fn }); }
+  function closeSheet() { if (S.sheet && S.sheet.parentNode) S.sheet.parentNode.removeChild(S.sheet); S.sheet = null; }
+  function openSheet(day, l) {
+    closeSheet();
+    var isToday = day.date === S.data.today;
+    var overlay = h('div', { class: 'overlay', onclick: function (e) { if (e.target === overlay) closeSheet(); } });
+    var p = h('div', { class: 'sheet' });
+    overlay.appendChild(p);
+    p.appendChild(h('div', { class: 'sheet-title', text: l.number + '. ' + l.name }));
+    p.appendChild(h('div', { class: 'sheet-sub', text: day.weekday_name + ', ' + fmtDate(day.date) }));
+
+    p.appendChild(btn(l.cancelled ? '↩️ Повернути урок' : '🚫 Скасувати урок', l.cancelled ? '' : 'danger',
+      function () { act('/api/admin/cancel', { date: day.date, number: l.number, value: !l.cancelled }); }));
+
+    var t1 = h('input', { type: 'time', value: l.start || '' }), t2 = h('input', { type: 'time', value: l.end || '' });
+    p.appendChild(h('div', { class: 'row' }, t1, h('span', { text: '–' }), t2,
+      btn('Змінити час', 'plain', function () { act('/api/admin/settime', { date: day.date, number: l.number, start: t1.value, end: t2.value }); })));
+    if (l.bell_override) p.appendChild(btn('Повернути стандартний час', 'plain', function () { act('/api/admin/resettime', { date: day.date, number: l.number }); }));
+
+    if (isToday) {
+      p.appendChild(l.early_end
+        ? btn('Прибрати позначку «закінчився раніше»', 'plain', function () { act('/api/admin/undoend', { date: day.date, number: l.number }); })
+        : btn('⏹ Урок закінчився зараз', 'plain', function () { act('/api/admin/endnow', { number: l.number }); }));
+    }
+
+    if (l.remote_eligible) {
+      if (l.in_person_confirmed) {
+        p.appendChild(btn('Повернути «дистанційно»', 'plain', function () { act('/api/admin/inperson', { date: day.date, number: l.number, value: false }); }));
+      } else {
+        var ann = h('input', { type: 'checkbox', checked: isToday });
+        p.appendChild(h('label', { class: 'check' }, ann, 'Оголосити в чат'));
+        p.appendChild(btn('🏫 Буде очно', '', function () { act('/api/admin/inperson', { date: day.date, number: l.number, value: true, announce: ann.checked }); }));
+      }
+    }
+    if (l.extra) p.appendChild(btn('🗑 Прибрати доданий урок', 'danger', function () { act('/api/admin/removelesson', { date: day.date, number: l.number }); }));
+    p.appendChild(btn('Закрити', 'ghost', closeSheet));
+    document.body.appendChild(overlay);
+    S.sheet = overlay;
+  }
+
+  /* ---------- каркас ---------- */
+  function setTab(t) {
+    S.tab = t;
+    if (t === 'alerts') loadStats().then(render);
+    render();
+  }
+  function tabbar() {
+    var tabs = [['today', '📅', 'Сьогодні'], ['week', '🗓', 'Тиждень'], ['alerts', '🚨', 'Тривоги']];
+    if (S.data.is_admin) tabs.push(['admin', '⚙️', 'Адмін']);
+    return h('div', { class: 'tabbar' }, tabs.map(function (t) {
+      return h('button', { class: 'tab' + (S.tab === t[0] ? ' on' : ''), type: 'button', onclick: function () { setTab(t[0]); } },
+        h('span', { text: t[1] }), t[2]);
+    }));
+  }
+  function tick() {
+    if (!S.data) return;
+    var nc = document.getElementById('nowcard'); if (nc) renderNowCard(nc);
+    var list = document.querySelectorAll('.js-alert');
+    for (var i = 0; i < list.length; i++) renderAlert(list[i]);
+  }
+  function render() {
+    var app = clear(document.getElementById('app'));
+    if (S.error) {
+      var forbidden = S.error.status === 403;
+      app.appendChild(h('div', { class: 'center' }, h('h2', { text: forbidden ? 'Немає доступу' : 'Відкрийте через Telegram' }), S.error.message));
+      return;
+    }
+    if (!S.data) { app.appendChild(h('div', { class: 'center', text: 'Завантаження…' })); return; }
+    var page = h('div', { class: 'page' });
+    if (S.offline) page.appendChild(h('div', { class: 'offline', text: 'Немає зв’язку — показано останні отримані дані' }));
+    page.appendChild(S.tab === 'today' ? viewToday() : S.tab === 'week' ? viewWeek() : S.tab === 'alerts' ? viewAlerts() : viewAdmin());
+    app.appendChild(page);
+    app.appendChild(tabbar());
+    tick();
+  }
+
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
+  setInterval(function () { if (!document.hidden && !S.sheet) refresh(); }, 20000);
+  setInterval(tick, 1000);
+  render();
+  refresh();
+})();
+</script>
+</body>
+</html>
