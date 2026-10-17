@@ -277,10 +277,19 @@ async def a_settings(request: web.Request) -> web.Response:
     key, value = str(b["key"]), b["value"]
     if key == "schedule_end" and value:
         value = _d(str(value)).isoformat()  # перевірка формату YYYY-MM-DD
-    if key == "remote_lesson_url":
-        value = str(value).strip()
-        if len(value) > 2048 or (value and (urlsplit(value).scheme != "https" or not urlsplit(value).netloc)):
-            raise ValueError("remote_lesson_url")
+    if key == "remote_lesson_links":
+        if not isinstance(value, dict) or len(value) > 100:
+            raise ValueError("remote_lesson_links")
+        clean = {}
+        for name, raw_url in value.items():
+            name, raw_url = str(name).strip()[:100], str(raw_url).strip()
+            if not name or len(raw_url) > 2048:
+                raise ValueError("remote_lesson_links")
+            parsed = urlsplit(raw_url)
+            if parsed.scheme != "https" or not parsed.hostname:
+                raise ValueError("remote_lesson_links")
+            clean[name] = raw_url
+        value = clean
     settings.set_value(key, value)
     return web.json_response({"ok": True, "settings": settings.load()})
 
