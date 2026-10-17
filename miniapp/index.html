@@ -35,6 +35,15 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .map-card h2{margin:0;padding:15px 16px 11px}
 .map-card iframe{display:block;width:100%;height:360px;border:0;background:var(--surface)}
 @media(max-width:480px){.map-card iframe{height:min(58vh,420px);min-height:300px}}
+/* Liquid glass surfaces and calm interaction motion */
+.pill,.box,.map-card,.sheet .p{background:color-mix(in srgb,var(--card) 82%,transparent);border:1px solid color-mix(in srgb,var(--tx) 12%,transparent);backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4)}
+.hero:not(.live):not(.hol){background:color-mix(in srgb,var(--card) 84%,transparent);backdrop-filter:blur(18px) saturate(1.35);-webkit-backdrop-filter:blur(18px) saturate(1.35)}
+.tabs{background:linear-gradient(145deg,color-mix(in srgb,var(--bg) 76%,transparent),color-mix(in srgb,var(--card) 76%,transparent));border-top-color:color-mix(in srgb,var(--tx) 13%,transparent);box-shadow:0 -8px 28px color-mix(in srgb,var(--tx) 6%,transparent)}
+.pill,.box,.hero,.map-card,.ban,.go,.tabs button,.strip button,.b2{transition:transform .22s cubic-bezier(.2,.75,.25,1),box-shadow .24s ease,border-color .22s ease,background-color .22s ease}
+@media(hover:hover){.pill:hover,.box:hover,.map-card:hover{border-color:color-mix(in srgb,var(--ac) 24%,var(--line));box-shadow:0 12px 30px color-mix(in srgb,var(--tx) 10%,transparent)}.go:hover,.b2:hover{transform:translateY(-2px);filter:brightness(1.04)}}
+button:active{transform:scale(.98)}
+.go:active,.strip button:active{transform:scale(.975)}
+@media(prefers-reduced-motion:reduce){button:active,.go:hover,.b2:hover,.pill:hover,.box:hover,.map-card:hover{transform:none!important}}
 </style>
 </head>
 <body>
