@@ -6,7 +6,12 @@
 Документация: https://api.alerts.in.ua/
 """
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import aiohttp
+
+import alert_log
 
 API_URL = "https://api.alerts.in.ua/v1/alerts/active.json"
 ALERT_TYPE = "air_raid"  # нас интересует именно воздушная тревога
@@ -26,6 +31,7 @@ class AlertWatcher:
         self.region_title = region_title
         self._was_active = False  # состояние с предыдущего опроса
         self._level: str | None = None  # "red" | "yellow" | None
+        self.last_ok: datetime | None = None  # час останнього успішного опитування
 
     @property
     def is_active(self) -> bool:
@@ -68,6 +74,7 @@ class AlertWatcher:
             log.warning("Не удалось получить статус тревоги: %s", e)
             return None
 
+        self.last_ok = datetime.now(ZoneInfo("Europe/Kyiv"))
         region_alert = self._find_region_air_raid(alerts)
         is_active = region_alert is not None
         new_level = region_alert.get("alert_level") if region_alert else None
@@ -79,6 +86,13 @@ class AlertWatcher:
             event = "ended"
         elif is_active and self._was_active and new_level != self._level:
             event = "level_changed"
+
+        if event == "started":
+            alert_log.on_started(new_level)
+        elif event == "ended":
+            alert_log.on_ended()
+        elif event == "level_changed":
+            alert_log.on_level_changed(new_level)
 
         self._was_active = is_active
         self._level = new_level

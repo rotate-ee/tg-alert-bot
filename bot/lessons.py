@@ -13,6 +13,7 @@ import cancellations
 import config
 import early_end
 import extra_lessons
+import holidays
 import remote_overrides
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
@@ -175,6 +176,8 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
     if now is None:
         now = datetime.now(KYIV_TZ)
     today = now.date()
+    if holidays.get_holiday(today):
+        return []  # канікули - уроків немає
     schedule = load_schedule()
     group = week_group(now)
     day_entries = schedule["days"].get(now.weekday(), [])

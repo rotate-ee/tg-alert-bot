@@ -12,6 +12,7 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import aiohttp
+import api
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import (
@@ -50,6 +51,22 @@ KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
 # URL міні-застосунку (HTTPS). Порожньо - команда /app вимкнена.
 MINIAPP_URL = os.getenv("MINIAPP_URL", "").strip()
+# Публічна адреса цього бота (для API міні-застосунку). На Railway береться
+# автоматично з RAILWAY_PUBLIC_DOMAIN, якщо там згенеровано домен.
+_pub = os.getenv("BOT_PUBLIC_URL", "").strip().rstrip("/")
+if not _pub and os.getenv("RAILWAY_PUBLIC_DOMAIN"):
+    _pub = "https://" + os.getenv("RAILWAY_PUBLIC_DOMAIN").strip()
+BOT_PUBLIC_URL = _pub
+
+
+def _miniapp_url() -> str:
+    if not MINIAPP_URL:
+        return ""
+    if not BOT_PUBLIC_URL:
+        return MINIAPP_URL
+    from urllib.parse import quote
+    sep = "&" if "?" in MINIAPP_URL else "?"
+    return f"{MINIAPP_URL}{sep}api={quote(BOT_PUBLIC_URL, safe='')}"
 
 bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher()
@@ -119,7 +136,7 @@ async def cmd_app(message: Message):
         await message.answer("Відкрийте міні-застосунок в особистих повідомленнях з ботом: /app")
         return
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="📅 Відкрити розклад", web_app=WebAppInfo(url=MINIAPP_URL))
+        InlineKeyboardButton(text="📅 Відкрити розклад", web_app=WebAppInfo(url=_miniapp_url()))
     ]])
     await message.answer("Розклад у міні-застосунку:", reply_markup=kb)
 
@@ -854,6 +871,7 @@ async def watch_alerts():
 
 
 async def main():
+    await api.start(bot, alert_watcher)
     asyncio.create_task(watch_alerts())
     asyncio.create_task(morning_digest())
     asyncio.create_task(lesson_reminders())
@@ -862,7 +880,7 @@ async def main():
     if MINIAPP_URL:
         try:
             await bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(text="Розклад", web_app=WebAppInfo(url=MINIAPP_URL))
+                menu_button=MenuButtonWebApp(text="Розклад", web_app=WebAppInfo(url=_miniapp_url()))
             )
         except Exception:
             log.exception("Не вдалося встановити кнопку меню міні-застосунку")

@@ -6,140 +6,180 @@
 <title>Розклад</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-:root{
- --bg:var(--tg-theme-bg-color,#fbfbfd);--tx:var(--tg-theme-text-color,#14161a);--hint:var(--tg-theme-hint-color,#7b8087);
- --card:var(--tg-theme-secondary-bg-color,#eff1f5);--ac:var(--tg-theme-button-color,#2f7cf6);--act:var(--tg-theme-button-text-color,#fff);
- --line:color-mix(in srgb,var(--tx) 10%,transparent);
-}
+:root{--bg:var(--tg-theme-bg-color,#fbfbfd);--tx:var(--tg-theme-text-color,#14161a);--hint:var(--tg-theme-hint-color,#7b8087);--card:var(--tg-theme-secondary-bg-color,#eff1f5);--ac:var(--tg-theme-button-color,#2f7cf6);--act:var(--tg-theme-button-text-color,#fff);--line:color-mix(in srgb,var(--tx) 12%,transparent);--ok:#23956a;--yl:#d99a00;--rd:#e0383e}
 @media(prefers-color-scheme:dark){:root:not([style*="--tg-theme-bg-color"]){--bg:#101216;--tx:#eceef2;--hint:#8b919a;--card:#1a1d23}}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{scroll-padding-top:env(safe-area-inset-top,0px)}
-body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:max(14px,env(safe-area-inset-top,0px)) 14px calc(28px + env(safe-area-inset-bottom,0px));font-variant-numeric:tabular-nums}
-button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
-.top{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px}
-.top h1{font-size:26px;line-height:1.1;margin:0;font-weight:750;letter-spacing:-.02em}
-.top small{display:block;color:var(--hint);font-size:14px;margin-top:3px}
-.wk{padding:6px 11px;border-radius:99px;background:var(--card);font-size:13px;font-weight:600;white-space:nowrap}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:max(14px,env(safe-area-inset-top,0px)) 14px calc(92px + env(safe-area-inset-bottom,0px));font-variant-numeric:tabular-nums}
+button,input,textarea{font:inherit;color:inherit}button{border:0;background:none;cursor:pointer}
+h1{font-size:26px;line-height:1.1;margin:0;font-weight:750;letter-spacing:-.02em}h2{font-size:18px;margin:22px 0 8px}
+small,.sm{color:var(--hint);font-size:14px}
+.top{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px;gap:8px}
+.pill{padding:6px 11px;border-radius:99px;background:var(--card);font-size:13px;font-weight:600;white-space:nowrap}
+.ban{display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border-radius:14px;margin-bottom:12px;text-align:left;font-weight:600;color:#fff;background:var(--ok)}
+.ban.yl{background:var(--yl)}.ban.rd{background:var(--rd)}.ban.off{background:var(--card);color:var(--hint)}.ban span{margin-left:auto;font-weight:500;opacity:.85;font-size:13px}
 .strip{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:8px}
-.strip button{padding:9px 0 8px;border-radius:14px;background:var(--card);display:flex;flex-direction:column;align-items:center;gap:1px;position:relative}
+.strip button{padding:9px 0 8px;border-radius:14px;background:var(--card);display:flex;flex-direction:column;align-items:center;position:relative}
 .strip b{font-size:13px;font-weight:600;color:var(--hint)}.strip span{font-size:18px;font-weight:700}
 .strip .sel{background:var(--ac);color:var(--act)}.strip .sel b{color:inherit;opacity:.8}
-.strip .tod::after{content:"";position:absolute;bottom:4px;width:4px;height:4px;border-radius:50%;background:var(--ac)}
-.strip .sel.tod::after{background:var(--act)}
-.nav{display:flex;justify-content:space-between;margin-bottom:14px;color:var(--hint);font-size:14px}
-.nav button{padding:6px 4px;color:var(--ac);font-weight:600}
-.hero{border-radius:22px;padding:18px;margin-bottom:16px;background:var(--card);position:relative;overflow:hidden}
-.hero.live{background:var(--ac);color:var(--act)}
-.hero .k{font-size:14px;opacity:.8}
-.hero .t{font-size:26px;font-weight:750;letter-spacing:-.02em;line-height:1.15;margin:4px 0 12px}
-.hero .m{display:flex;justify-content:space-between;font-size:14px;opacity:.9;margin-top:8px}
-.bar{height:8px;border-radius:9px;background:color-mix(in srgb,currentColor 25%,transparent);overflow:hidden}
-.bar i{display:block;height:100%;border-radius:9px;background:currentColor;transition:width .6s}
-.list{display:flex;flex-direction:column}
-.row{display:grid;grid-template-columns:50px 5px 1fr auto;gap:12px;align-items:stretch;padding:9px 0;text-align:left;width:100%}
-.row .tm{font-size:14px;line-height:1.25;text-align:right}.row .tm span{color:var(--hint);display:block;font-size:12.5px}
-.row .cl{border-radius:5px;background:var(--c)}
-.row .bd b{display:block;font-size:17px;font-weight:650}.row .bd span{color:var(--hint);font-size:13.5px}
-.row .nb{font-size:13px;color:var(--hint);align-self:center}
-.row.past{opacity:.45}.row.now .bd b{color:var(--ac)}
-.row.gap{padding:0 0 0 62px;height:20px;align-items:center;color:var(--hint);font-size:12px}
-.empty{background:var(--card);border-radius:18px;padding:28px 16px;text-align:center;color:var(--hint)}
-.hw{margin-top:18px}.hw h2{font-size:17px;margin:0 0 8px}
-.hw .it{background:var(--card);border-radius:14px;padding:10px 13px;margin-bottom:6px;font-size:15px}
-.hw .it b{display:block;font-size:13px;color:var(--hint);font-weight:600;margin-bottom:2px}
-.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;z-index:9}
-.sheet.on{display:flex}
-.sheet .p{width:100%;background:var(--bg);border-radius:22px 22px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));animation:up .22s ease-out}
+.strip .tod::after{content:"";position:absolute;bottom:4px;width:4px;height:4px;border-radius:50%;background:var(--ac)}.strip .sel.tod::after{background:var(--act)}
+.strip .hol:not(.sel){background:color-mix(in srgb,var(--ok) 22%,var(--card))}
+.nav{display:flex;justify-content:space-between;margin-bottom:14px}.nav button{padding:6px 4px;color:var(--ac);font-weight:600;font-size:14px}
+.hero{border-radius:22px;padding:18px;margin-bottom:16px;background:var(--card)}
+.hero.live{background:var(--ac);color:var(--act)}.hero.hol{background:var(--ok);color:#fff}
+.hero .k{font-size:14px;opacity:.85}.hero .t{font-size:26px;font-weight:750;letter-spacing:-.02em;line-height:1.15;margin:4px 0 10px}
+.bar{height:8px;border-radius:9px;background:color-mix(in srgb,currentColor 25%,transparent);overflow:hidden}.bar i{display:block;height:100%;border-radius:9px;background:currentColor;transition:width .6s}
+.m{display:flex;justify-content:space-between;font-size:14px;margin-top:8px;opacity:.9}
+.row{display:grid;grid-template-columns:50px 5px 1fr auto;gap:12px;padding:9px 0;text-align:left;width:100%}
+.tm{font-size:14px;line-height:1.25;text-align:right}.tm span{color:var(--hint);display:block;font-size:12.5px}
+.cl{border-radius:5px;background:var(--c)}.bd b{display:block;font-size:17px;font-weight:650}.bd span{color:var(--hint);font-size:13.5px}
+.nb{font-size:13px;color:var(--hint);align-self:center}.row.past{opacity:.45}.row.now .bd b{color:var(--ac)}
+.row.cx .bd b{text-decoration:line-through;color:var(--hint)}.row.cx .cl{background:var(--hint)}
+.tag{color:var(--rd)!important;font-weight:600}
+.box{background:var(--card);border-radius:16px;padding:12px 14px;margin-bottom:8px}
+.box b{display:block}.hl{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.al{border-radius:24px;padding:22px 18px;color:#fff;background:var(--ok);margin-bottom:12px}
+.al.yl{background:var(--yl)}.al.rd{background:var(--rd);animation:pulse 3s ease-in-out infinite}.al.off{background:var(--card);color:var(--hint)}
+.al .t{font-size:30px;font-weight:780;letter-spacing:-.02em;line-height:1.1;margin:2px 0 6px}.al .k{opacity:.9;font-size:15px}
+@keyframes pulse{50%{box-shadow:0 0 0 10px color-mix(in srgb,var(--rd) 22%,transparent)}}
+.st{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}.st .box{margin:0}.st b{font-size:24px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;background:var(--yl)}.dot.red{background:var(--rd)}
+.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;gap:6px;padding:8px 14px calc(8px + env(safe-area-inset-bottom,0px));background:var(--bg);border-top:1px solid var(--line)}
+.tabs button{flex:1;padding:11px 4px;border-radius:13px;font-weight:600;font-size:14px;color:var(--hint)}.tabs .on{background:var(--card);color:var(--tx)}
+.b2{padding:8px 12px;border-radius:11px;background:var(--bg);font-weight:600;font-size:14px}.b2.rd{color:var(--rd)}
+.go{width:100%;padding:13px;border-radius:14px;background:var(--ac);color:var(--act);font-weight:650;margin-top:8px}
+input,textarea,select{width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);margin-bottom:8px;min-width:0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}label{font-size:13px;color:var(--hint);display:block;margin-bottom:3px}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;z-index:9}.sheet.on{display:flex}
+.sheet .p{width:100%;max-height:88vh;overflow:auto;background:var(--bg);border-radius:22px 22px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));animation:up .22s ease-out}
 @keyframes up{from{transform:translateY(40px);opacity:0}}
-.p h3{margin:0 0 2px;font-size:20px}.p .s{color:var(--hint);font-size:14px;margin-bottom:12px}
-.p textarea{width:100%;min-height:96px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--tx);padding:12px;font:inherit;resize:none}
-.p .bt{display:flex;gap:8px;margin-top:10px}
-.p .bt button{flex:1;padding:12px;border-radius:13px;background:var(--card);font-weight:600}
-.p .bt .go{background:var(--ac);color:var(--act)}
-button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.empty{background:var(--card);border-radius:18px;padding:26px 16px;text-align:center;color:var(--hint)}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:9px 16px;border-radius:99px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}.toast.on{opacity:1}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-<div class="top"><div><h1 id="ttl"></h1><small id="sub"></small></div><div class="wk" id="wk"></div></div>
-<div class="strip" id="strip"></div>
-<div class="nav"><button id="prev">‹ Минулий тиждень</button><button id="today">Сьогодні</button><button id="next">Наступний ›</button></div>
-<div id="hero"></div>
-<div class="list" id="list"></div>
-<div class="hw" id="hw"></div>
+<div id="app"></div>
+<div class="tabs" id="tabs"></div>
 <div class="sheet" id="sheet"><div class="p" id="panel"></div></div>
-
+<div class="toast" id="toast"></div>
 <script>
-const S={bells:{1:["11:25","12:10"],2:["12:25","13:10"],3:["13:25","14:10"],4:["14:15","15:00"],5:["15:05","15:50"],6:["15:55","16:40"],7:["17:05","17:50"],8:["17:55","18:40"]},remote:[7,8],
-days:{0:["Математика","Англ. мова","Укр. мова","Укр. літ","Хімія","Фіз-ра","Історія"],
-1:["Правознавство","Укр. мова","Біологія","Зар. літ","Інформатика",{"1_2":"Мистецтво","3_4":"Музика"},"ЗБД",{"3_4":"Підприємництво"}],
-2:["Фізика","Англ. мова",{"1_2":"Громадянська освіта","3_4":"Історія"},"Географія","Укр. літ","Математика","Математика"],
-3:["Фіз-ра","Зар. літ","Математика","Хімія","Фізика","Інформатика","Технології"],
-4:["Фіз-ра","Історія","Біологія","Фізика","Укр. мова","Математика","Англ. мова"],5:[],6:[]},
-rooms:{0:["303","318","316","316","325",null,"304"],1:["309","316","321","325","310",{"1_2":"222","3_4":"206"},"304",{"3_4":"314"}],
-2:["206","318","304","314","316","303","303"],3:[null,"222","303","325","210","310","103/101"],4:[null,"304","321","202","316","303","318"],5:[],6:[]},
-anchor:"2026-09-07"};
+const tg=window.Telegram&&Telegram.WebApp;if(tg){tg.ready();tg.expand();}
+const qs=new URLSearchParams(location.search);
+let API=qs.get("api")||localStorage.getItem("api")||"";if(qs.get("api"))localStorage.setItem("api",API);
+const hdr=()=>({"Content-Type":"application/json","X-Init-Data":tg?tg.initData:""});
+const get=async p=>{const r=await fetch(API+p,{headers:hdr()});if(!r.ok)throw r.status;return r.json()};
+const post=async(p,b)=>{const r=await fetch(API+p,{method:"POST",headers:hdr(),body:JSON.stringify(b)});if(!r.ok)throw r.status;return r.json()};
+const $=id=>document.getElementById(id),D=864e5,esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const DN=["Пн","Вт","Ср","Чт","Пт","Сб","Нд"],DF=["Понеділок","Вівторок","Середа","Четвер","П'ятниця","Субота","Неділя"];
 const HUE={"Математика":215,"Англ":340,"Укр. мова":45,"Укр. літ":30,"Хімія":150,"Фіз-ра":8,"Історія":22,"Біологія":125,"Фізика":262,"Зар. літ":295,"Інформатика":190,"Географія":95,"ЗБД":0,"Правознавство":235,"Мистецтво":320,"Музика":320,"Технології":70,"Підприємництво":170,"Громадянська":235};
 const col=n=>{const k=Object.keys(HUE).find(k=>n.startsWith(k));const h=k?HUE[k]:[...n].reduce((a,c)=>a+c.charCodeAt(0),0)%360;return k==="ЗБД"?"hsl(0 0% 55%)":`hsl(${h} 68% 56%)`};
-const DN=["Пн","Вт","Ср","Чт","Пт","Сб","Нд"],DF=["Понеділок","Вівторок","Середа","Четвер","П'ятниця","Субота","Неділя"];
-const tg=window.Telegram&&Telegram.WebApp;if(tg){tg.ready();tg.expand();}
-const hap=t=>{try{tg&&tg.HapticFeedback.selectionChanged()}catch(e){}};
-const D=864e5,$=id=>document.getElementById(id);
 function kyiv(){const p=Object.fromEntries(new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Kyiv",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}).formatToParts(new Date()).map(x=>[x.type,x.value]));return new Date(Date.UTC(+p.year,+p.month-1,+p.day,+p.hour%24,+p.minute))}
-const wd=d=>(d.getUTCDay()+6)%7,day0=d=>new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()));
-const key=d=>d.toISOString().slice(0,10),fmt=d=>String(d.getUTCDate()).padStart(2,"0")+"."+String(d.getUTCMonth()+1).padStart(2,"0");
-const group=d=>Math.floor((d.getUTCDate()-1)/7)+1<=2?"1_2":"3_4";
-const monOf=d=>new Date(day0(d).getTime()-wd(d)*D);
-const isSchool=d=>Math.floor((monOf(d)-new Date(S.anchor+"T00:00:00Z"))/D/7)%2===0;
-const pick=(e,g)=>e&&typeof e==="object"?e[g]||null:e;
-const mins=s=>{const[a,b]=s.split(":");return+a*60+ +b};
-function lessons(d){const w=wd(d),g=group(d),sc=isSchool(d),o=[];
- (S.days[w]||[]).forEach((e,i)=>{const name=pick(e,g);if(!name)return;const n=i+1,rem=S.remote.includes(n);
-  o.push({n,name,remote:rem&&sc,room:sc&&!rem?pick((S.rooms[w]||[])[i],g):null,start:S.bells[n][0],end:S.bells[n][1]})});return o}
+const iso=d=>d.toISOString().slice(0,10),fd=s=>s.slice(8,10)+"."+s.slice(5,7),U=s=>new Date(s+"T00:00:00Z"),wd=d=>(d.getUTCDay()+6)%7;
+const mins=s=>{const[a,b]=s.split(":");return+a*60+ +b},fm=m=>m>=60?Math.floor(m/60)+" год "+(m%60?m%60+" хв":""):m+" хв";
+const mon=d=>new Date(U(iso(d)).getTime()-wd(d)*D);
+let tab="sch",off=0,sel=null,st=null,offline=false,admin=false,adminDay=null,adminDate=null;
 let notes={};try{notes=JSON.parse(localStorage.getItem("hw")||"{}")}catch(e){}
-const save=()=>{try{localStorage.setItem("hw",JSON.stringify(notes))}catch(e){}};
-let now=kyiv(),off=0,sel=null;
-function baseMon(){return new Date(monOf(now).getTime()+(wd(now)>4?7*D:0)+off*7*D)}
-function initSel(){sel=wd(now)>4?new Date(baseMon()):day0(now)}
-const nm=l=>l.name+(l.remote?" (дист.)":"");
-function render(){
- now=kyiv();const t=day0(now),cur=now.getUTCHours()*60+now.getUTCMinutes(),mon=baseMon();
- if(!sel)initSel();
- $("ttl").textContent=DF[wd(sel)];
- $("sub").textContent=fmt(sel)+"."+sel.getUTCFullYear();
- $("wk").textContent=isSchool(sel)?"🏫 Очно":"🏠 Вдома";
- $("strip").innerHTML=[0,1,2,3,4].map(i=>{const d=new Date(mon.getTime()+i*D);return `<button data-d="${key(d)}" class="${key(d)===key(sel)?"sel ":""}${key(d)===key(t)?"tod":""}"><b>${DN[i]}</b><span>${d.getUTCDate()}</span></button>`}).join("");
- const L=lessons(sel),isT=key(sel)===key(t),H=$("hero");
- if(!L.length){H.innerHTML=`<div class="hero"><div class="t">Уроків немає</div><div class="k">Можна відпочити</div></div>`}
- else if(isT){
-  const c=L.find(l=>cur>=mins(l.start)&&cur<mins(l.end)),nx=L.find(l=>mins(l.start)>cur),last=L[L.length-1];
-  if(c){const p=(cur-mins(c.start))/(mins(c.end)-mins(c.start))*100;
-   H.innerHTML=`<div class="hero live"><div class="k">Зараз ${c.n}-й урок${c.room?", каб. "+c.room:""}</div><div class="t">${nm(c)}</div><div class="bar"><i style="width:${p}%"></i></div><div class="m"><span>${c.start}</span><span>ще ${mins(c.end)-cur} хв</span><span>${c.end}</span></div></div>`}
-  else if(nx){const w=mins(nx.start)-cur;
-   H.innerHTML=`<div class="hero"><div class="k">${cur<mins(L[0].start)?"Уроки ще не почались":"Перерва"}</div><div class="t">${nm(nx)}</div><div class="k">${nx.n}-й урок о ${nx.start}${nx.room?", каб. "+nx.room:""}, через ${w>=60?Math.floor(w/60)+" год "+w%60+" хв":w+" хв"}</div></div>`}
-  else H.innerHTML=`<div class="hero"><div class="t">Уроки закінчились</div><div class="k">Останній був о ${last.end}</div></div>`;
- } else {const a=L[0],z=L[L.length-1];
-  H.innerHTML=`<div class="hero"><div class="k">${sel<t?"Було":"Буде"} уроків: ${L.length}</div><div class="t">${a.start} – ${z.end}</div><div class="k">Перший: ${nm(a)}</div></div>`}
- let h="";
- L.forEach((l,i)=>{const cl=isT?(cur>=mins(l.end)?"past":cur>=mins(l.start)?"now":""):(sel<t?"past":"");
-  if(i){const g=mins(l.start)-mins(L[i-1].end);if(g>=30)h+=`<div class="row gap">вікно ${Math.floor(g/60)?Math.floor(g/60)+" год ":""}${g%60?g%60+" хв":""}</div>`}
-  h+=`<button class="row ${cl}" data-n="${l.n}" style="--c:${col(l.name)}"><div class="tm">${l.start}<span>${l.end}</span></div><div class="cl"></div><div class="bd"><b>${l.name}</b><span>${l.n}-й урок${l.room?", каб. "+l.room:""}${l.remote?", дистанційно":""}</span></div><div class="nb">${notes[key(sel)+"|"+l.n]?"📝":""}</div></button>`});
- $("list").innerHTML=h;
- const ni=Object.keys(notes).filter(k=>k>=key(t)&&notes[k]).sort().slice(0,6);
- $("hw").innerHTML=ni.length?`<h2>Нагадування</h2>`+ni.map(k=>{const[d,n]=k.split("|"),dd=new Date(d+"T00:00:00Z"),l=lessons(dd).find(x=>x.n==n);return `<div class="it"><b>${DN[wd(dd)]} ${fmt(dd)}, ${l?l.name:n+"-й урок"}</b>${notes[k].replace(/</g,"&lt;")}</div>`}).join(""):"";
+const saveN=()=>{try{localStorage.setItem("hw",JSON.stringify(notes))}catch(e){}};
+const hap=()=>{try{tg&&tg.HapticFeedback.selectionChanged()}catch(e){}};
+const toast=t=>{const e=$("toast");e.textContent=t;e.classList.add("on");setTimeout(()=>e.classList.remove("on"),1800)};
+const sheet=h=>{$("panel").innerHTML=h;$("sheet").classList.add("on")},closeSheet=()=>$("sheet").classList.remove("on");
+$("sheet").onclick=e=>{if(e.target.id==="sheet")closeSheet()};
+const lvl=a=>a.level==="red"?"Червоний рівень":a.level==="yellow"?"Жовтий рівень":"Тривога";
+const cls=a=>!a.active?"":a.level==="yellow"?"yl":"rd";
+const dur=m=>m<1?"щойно":fm(m);
+const since=a=>a.since?Math.max(0,Math.floor((Date.now()-Date.parse(a.since))/6e4)):null;
+
+async function load(){
+ const now=kyiv();let base=new Date(mon(now).getTime()+(wd(now)>4?7*D:0)+off*7*D);
+ try{st=await get(`/api/state?from=${iso(base)}&days=7`);offline=false;st.base=iso(base);try{localStorage.setItem("cache",JSON.stringify(st))}catch(e){}}
+ catch(e){try{st=JSON.parse(localStorage.getItem("cache")||"null")}catch(_){st=null}offline=!!st;if(!st){st={err:true}}}
+ if(!sel||!st.days||!st.days[sel])sel=st.base&&(wd(now)>4||off)?st.base:iso(now);
+ if(st.days&&!st.days[sel])sel=st.base;
 }
-$("strip").onclick=e=>{const b=e.target.closest("button");if(!b)return;sel=new Date(b.dataset.d+"T00:00:00Z");hap();render()};
-$("prev").onclick=()=>{off--;sel=new Date(sel.getTime()-7*D);hap();render()};
-$("next").onclick=()=>{off++;sel=new Date(sel.getTime()+7*D);hap();render()};
-$("today").onclick=()=>{off=0;sel=null;hap();render()};
-$("list").onclick=e=>{const b=e.target.closest(".row[data-n]");if(!b)return;const n=+b.dataset.n,l=lessons(sel).find(x=>x.n===n),k=key(sel)+"|"+n;
- $("panel").innerHTML=`<h3>${l.name}</h3><div class="s">${DF[wd(sel)]}, ${fmt(sel)}, ${l.n}-й урок</div><textarea id="ta" placeholder="Що задали або що взяти з собою">${(notes[k]||"").replace(/</g,"&lt;")}</textarea><div class="bt"><button id="cx">Закрити</button>${notes[k]?'<button id="dl">Видалити</button>':""}<button class="go" id="sv">Зберегти</button></div>`;
- $("sheet").classList.add("on");
- $("cx").onclick=()=>$("sheet").classList.remove("on");
- $("sv").onclick=()=>{const v=$("ta").value.trim();if(v)notes[k]=v;else delete notes[k];save();$("sheet").classList.remove("on");render()};
- if($("dl"))$("dl").onclick=()=>{delete notes[k];save();$("sheet").classList.remove("on");render()}};
-$("sheet").onclick=e=>{if(e.target.id==="sheet")$("sheet").classList.remove("on")};
-render();setInterval(()=>{if(!$("sheet").classList.contains("on"))render()},20000);
+async function loadAdmin(){try{admin=(await get("/api/me")).admin}catch(e){admin=false}}
+async function loadAdminDay(){adminDate=adminDate||iso(kyiv());try{adminDay=(await get(`/api/state?from=${adminDate}&days=1`)).days[adminDate]}catch(e){adminDay=null}}
+
+function banner(){const a=st.alert;return `<button class="ban ${a.active?cls(a):""}" data-go="al">${a.active?"🚨 "+lvl(a):"🟢 Тривоги немає"}<span>${a.active&&since(a)!==null?dur(since(a)):"Детальніше"}</span></button>`}
+function sch(){
+ const now=kyiv(),t=iso(now),cur=now.getUTCHours()*60+now.getUTCMinutes(),day=st.days[sel],L=day.lessons;
+ const days=Object.keys(st.days).slice(0,5);
+ let h=`<div class="top"><div><h1>${DF[wd(U(sel))]}</h1><small>${fd(sel)}.${sel.slice(0,4)}</small></div><div class="pill">${day.holiday?"🌴 Канікули":day.school===false?"🏠 Вдома":day.school?"🏫 Очно":""}</div></div>`;
+ if(offline)h+=`<div class="box sm">Немає зв'язку з ботом. Показано збережені дані.</div>`;
+ h+=banner();
+ h+=`<div class="strip">${days.map(k=>`<button data-d="${k}" class="${k===sel?"sel ":""}${k===t?"tod ":""}${st.days[k].holiday?"hol":""}"><b>${DN[wd(U(k))]}</b><span>${+k.slice(8)}</span></button>`).join("")}</div>`;
+ h+=`<div class="nav"><button data-w="-1">‹ Минулий</button><button data-w="0">Сьогодні</button><button data-w="1">Наступний ›</button></div>`;
+ const isT=sel===t,live=L.filter(l=>!l.cancelled),c=isT&&live.find(l=>cur>=mins(l.start)&&cur<mins(l.end)),nx=isT&&live.find(l=>mins(l.start)>cur);
+ if(day.holiday){const left=Math.round((U(day.holiday.to)-U(sel))/D)+1;h+=`<div class="hero hol"><div class="k">${esc(day.holiday.title)}</div><div class="t">Уроків немає</div><div class="k">До ${fd(day.holiday.to)} включно, залишилось днів: ${left}</div></div>`}
+ else if(!L.length)h+=`<div class="hero"><div class="t">Уроків немає</div><div class="k">${wd(U(sel))>4?"Вихідний":"Можна відпочити"}</div></div>`;
+ else if(!isT){const a=live[0],z=live[live.length-1];h+=a?`<div class="hero"><div class="k">Уроків: ${live.length}</div><div class="t">${a.start} – ${z.end}</div><div class="k">Перший: ${esc(a.name)}</div></div>`:`<div class="hero"><div class="t">Усі уроки скасовано</div></div>`}
+ else if(c){const p=(cur-mins(c.start))/(mins(c.end)-mins(c.start))*100;h+=`<div class="hero live"><div class="k">Зараз ${c.number}-й урок${c.room?", каб. "+esc(c.room):""}</div><div class="t">${esc(c.name)}</div><div class="bar"><i style="width:${p}%"></i></div><div class="m"><span>${c.start}</span><span>ще ${mins(c.end)-cur} хв</span><span>${c.end}</span></div></div>`}
+ else if(nx){h+=`<div class="hero"><div class="k">${cur<mins(live[0].start)?"Уроки ще не почались":"Перерва"}</div><div class="t">${esc(nx.name)}</div><div class="k">${nx.number}-й урок о ${nx.start}${nx.room?", каб. "+esc(nx.room):""}, через ${fm(mins(nx.start)-cur)}</div></div>`}
+ else h+=`<div class="hero"><div class="t">Уроки закінчились</div></div>`;
+ h+=L.map(l=>{const k=sel+"|"+l.number,past=isT?cur>=mins(l.end):sel<t,now_=isT&&!l.cancelled&&cur>=mins(l.start)&&cur<mins(l.end);
+  return `<button class="row ${l.cancelled?"cx ":""}${past?"past ":""}${now_?"now":""}" data-n="${l.number}" style="--c:${col(l.name)}"><div class="tm">${l.start}<span>${l.end}</span></div><div class="cl"></div><div class="bd"><b>${esc(l.name)}</b><span>${l.number}-й урок${l.room?", каб. "+esc(l.room):""}${l.remote?", дистанційно":""}${l.cancelled?' <i class="tag">скасовано</i>':""}</span></div><div class="nb">${notes[k]?"📝":""}</div></button>`}).join("");
+ const nh=st.holidays.filter(x=>x.to>=t).slice(0,3);
+ if(nh.length)h+=`<h2>Канікули</h2>`+nh.map(x=>{const d=Math.round((U(x.from)-U(t))/D);return `<div class="box"><b>${esc(x.title)}</b><span class="sm">${fd(x.from)} – ${fd(x.to)}, ${d>0?"через "+d+" дн.":"тривають"}</span></div>`}).join("");
+ const ni=Object.keys(notes).filter(k=>k.slice(0,10)>=t&&notes[k]).sort().slice(0,5);
+ if(ni.length)h+=`<h2>Нагадування</h2>`+ni.map(k=>`<div class="box"><b class="sm">${fd(k.slice(0,10))}, ${k.split("|")[1]}-й урок</b>${esc(notes[k])}</div>`).join("");
+ return h}
+function alr(){
+ const a=st.alert,m=since(a),ago=a.last_ok?Math.floor((Date.now()-Date.parse(a.last_ok))/1e3):null;
+ let h=`<div class="top"><div><h1>Тривоги</h1><small>${esc(a.region)}</small></div></div>`;
+ if(offline)h+=`<div class="box sm">Немає зв'язку з ботом. Дані можуть бути застарілими.</div>`;
+ h+=`<div class="al ${a.active?cls(a):""}"><div class="k">${a.active?"Повітряна тривога":"Зараз"}</div><div class="t">${a.active?lvl(a):"Тривоги немає"}</div><div class="k">${a.active?(m!==null?"Триває "+(m<1?"менше хвилини":fm(m)):"Триває"):"Можна не поспішати в укриття"}</div></div>`;
+ h+=`<div class="sm" style="margin:0 2px 12px">${ago===null?"Ще не було перевірки":"Перевірено "+(ago<60?ago+" с":Math.floor(ago/60)+" хв")+" тому"}</div>`;
+ h+=`<div class="st"><div class="box"><span class="sm">Сьогодні тривог</span><b>${a.today.count}</b></div><div class="box"><span class="sm">Загалом</span><b>${a.today.minutes} хв</b></div></div>`;
+ h+=`<h2>Історія</h2>`;
+ if(!a.history.length)h+=`<div class="empty">Поки що записів немає. Бот почав вести журнал з моменту оновлення.</div>`;
+ const t=iso(kyiv()),y=iso(new Date(U(t)-D));
+ h+=a.history.map(x=>{const s=x.start,d=s.slice(0,10),e=x.end,dur=Math.max(0,Math.round(((e?Date.parse(e):Date.now())-Date.parse(s))/6e4));
+  return `<div class="box hl"><div><b><i class="dot ${x.level==="red"?"red":""}"></i>${d===t?"Сьогодні":d===y?"Вчора":fd(d)}, ${s.slice(11,16)} – ${e?e.slice(11,16):"триває"}</b><span class="sm">${x.level==="red"?"Червоний":x.level==="yellow"?"Жовтий":"Рівень невідомий"} рівень</span></div><div class="sm">${fm(dur)||"<1 хв"}</div></div>`}).join("");
+ return h}
+function adm(){
+ let h=`<div class="top"><div><h1>Керування</h1><small>Тільки для адмінів</small></div></div><h2 style="margin-top:6px">Уроки</h2><input type="date" id="ad" value="${adminDate}">`;
+ const d=adminDay;
+ if(!d)h+=`<div class="empty">Не вдалося завантажити день</div>`;
+ else{if(d.holiday)h+=`<div class="box sm">У цей день канікули: ${esc(d.holiday.title)}. Уроки не показуються.</div>`;
+  h+=d.lessons.map(l=>`<div class="box"><div class="hl"><div><b${l.cancelled?' style="text-decoration:line-through"':""}>${l.number}. ${esc(l.name)}</b><span class="sm">${l.start}–${l.end}</span></div><div><button class="b2" data-cx="${l.number}" data-v="${l.cancelled?0:1}">${l.cancelled?"Повернути":"Скасувати"}</button> <button class="b2" data-tm="${l.number}" data-s="${l.start}" data-e="${l.end}">Час</button></div></div></div>`).join("");
+  h+=`<button class="b2" id="addl" style="margin-top:4px">+ Додатковий урок</button>`}
+ h+=`<h2>Канікули</h2>`+(st.holidays.length?st.holidays.map(x=>`<div class="box hl"><div><b>${esc(x.title)}</b><span class="sm">${fd(x.from)} – ${fd(x.to)}</span></div><button class="b2 rd" data-hd="${x.id}">Видалити</button></div>`).join(""):`<div class="box sm">Канікул не додано</div>`);
+ h+=`<div class="two"><div><label>Від</label><input type="date" id="hf"></div><div><label>До (включно)</label><input type="date" id="ht"></div></div><input id="hn" placeholder="Назва, наприклад: Осінні канікули"><button class="go" id="hadd">Додати канікули</button>`;
+ h+=`<h2>Оголошення в чат</h2><textarea id="an" rows="3" placeholder="Текст повідомлення для класного чату"></textarea><button class="go" id="asend">Надіслати в чат</button>`;
+ return h}
+function render(){
+ const A=$("app");
+ if(st&&st.err){A.innerHTML=`<div class="top"><h1>Розклад</h1></div><div class="empty">Не вдалося зв'язатися з ботом.<br><br>${API?"Перевірте, що бот працює і має публічну адресу (Railway: Settings, Networking, Generate Domain).":"Відкрийте застосунок командою /app у боті: адреса бота передається автоматично."}</div><button class="go" onclick="boot()">Спробувати знову</button>`;$("tabs").innerHTML="";return}
+ A.innerHTML=tab==="sch"?sch():tab==="al"?alr():adm();
+ const a=st.alert,T=[["sch","Розклад"],["al",a.active?"🚨 Тривоги":"Тривоги"]];if(admin)T.push(["adm","Керування"]);
+ $("tabs").innerHTML=T.map(([k,n])=>`<button data-t="${k}" class="${k===tab?"on":""}">${n}</button>`).join("");
+}
+$("tabs").onclick=async e=>{const b=e.target.closest("button");if(!b)return;tab=b.dataset.t;hap();if(tab==="adm")await loadAdmin2();render();scrollTo(0,0)};
+const loadAdmin2=async()=>{await loadAdminDay()};
+$("app").onclick=async e=>{const b=e.target.closest("button");if(!b)return;const D_=b.dataset;
+ if(D_.go){tab="al";hap();return render()}
+ if(D_.d){sel=D_.d;hap();return render()}
+ if(D_.w!==undefined){off=D_.w==="0"?0:off+ +D_.w;sel=null;hap();await load();return render()}
+ if(D_.n){const l=st.days[sel].lessons.find(x=>x.number==D_.n),k=sel+"|"+l.number;
+  return sheet(`<h3 style="margin:0 0 2px;font-size:20px">${esc(l.name)}</h3><div class="sm" style="margin-bottom:12px">${DF[wd(U(sel))]}, ${fd(sel)}, ${l.number}-й урок</div><textarea id="ta" rows="4" placeholder="Що задали або що взяти з собою">${esc(notes[k]||"")}</textarea><button class="go" id="sv">Зберегти</button>${notes[k]?'<button class="go" id="dl" style="background:var(--card);color:var(--tx)">Видалити</button>':""}`),
+  $("sv").onclick=()=>{const v=$("ta").value.trim();if(v)notes[k]=v;else delete notes[k];saveN();closeSheet();render()},
+  $("dl")&&($("dl").onclick=()=>{delete notes[k];saveN();closeSheet();render()})}
+ if(tab!=="adm")return;
+ const act=async(fn,ok)=>{try{await fn();toast(ok);await load();await loadAdminDay();render()}catch(x){toast("Помилка: "+(x===403?"немає прав":"спробуйте ще раз"))}};
+ if(D_.cx)return act(()=>post("/api/admin/cancel",{date:adminDate,number:+D_.cx,cancel:D_.v==="1"}),D_.v==="1"?"Урок скасовано":"Урок повернуто");
+ if(D_.hd)return act(()=>post("/api/admin/holiday",{remove:D_.hd}),"Канікули видалено");
+ if(D_.tm){sheet(`<h3 style="margin:0 0 12px">${D_.tm}-й урок: змінити час</h3><div class="two"><div><label>Початок</label><input type="time" id="s1" value="${D_.s}"></div><div><label>Кінець</label><input type="time" id="e1" value="${D_.e}"></div></div><button class="go" id="ok">Зберегти</button><button class="go" id="clr" style="background:var(--card);color:var(--tx)">Повернути за розкладом</button>`);
+  $("ok").onclick=()=>{closeSheet();act(()=>post("/api/admin/time",{date:adminDate,number:+D_.tm,start:$("s1").value,end:$("e1").value}),"Час змінено")};
+  $("clr").onclick=()=>{closeSheet();act(()=>post("/api/admin/time",{date:adminDate,number:+D_.tm,clear:true}),"Час повернуто")};return}
+ if(b.id==="addl"){sheet(`<h3 style="margin:0 0 12px">Додатковий урок на ${fd(adminDate)}</h3><div class="two"><div><label>Номер</label><input type="number" id="xn" min="0" max="12" value="0"></div><div><label>Назва</label><input id="xm"></div><div><label>Початок</label><input type="time" id="xs"></div><div><label>Кінець</label><input type="time" id="xe"></div></div><button class="go" id="ok">Додати</button>`);
+  $("ok").onclick=()=>{const v=[$("xn").value,$("xm").value,$("xs").value,$("xe").value];closeSheet();act(()=>post("/api/admin/lesson",{date:adminDate,number:+v[0],name:v[1],start:v[2],end:v[3]}),"Урок додано")};return}
+ if(b.id==="hadd"){const f=$("hf").value,t=$("ht").value;if(!f||!t)return toast("Вкажіть обидві дати");return act(()=>post("/api/admin/holiday",{from:f,to:t,title:$("hn").value}),"Канікули додано")}
+ if(b.id==="asend"){const v=$("an").value.trim();if(!v)return toast("Введіть текст");if(!confirm("Надіслати в чат класу?"))return;return act(()=>post("/api/admin/announce",{text:v}),"Надіслано")}
+};
+$("app").onchange=async e=>{if(e.target.id==="ad"&&e.target.value){adminDate=e.target.value;await loadAdminDay();render()}};
+async function boot(){await load();if(!st.err)await loadAdmin();render()}
+boot();
+setInterval(async()=>{if($("sheet").classList.contains("on")||tab==="adm")return;await load();render()},15000);
 </script>
 </body>
 </html>
