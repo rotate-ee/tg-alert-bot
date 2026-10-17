@@ -15,6 +15,7 @@ import early_end
 import extra_lessons
 import holidays
 import remote_overrides
+import renumber
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 SCHEDULE_PATH = Path(__file__).parent / "schedule.json"
@@ -184,8 +185,22 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
     room_entries = schedule["rooms"].get(now.weekday(), [])
     cancelled = cancellations.get_cancelled_numbers(today)
     lessons = _build_day_lessons(
-        day_entries, schedule["bells"], group, cancelled, schedule["remote_numbers"], room_entries
+        day_entries, schedule["bells"], group, set(), schedule["remote_numbers"], room_entries
     )
+
+    # разова перенумерація (/api, міні-застосунок): урок переходить в інший
+    # слот дзвінка; скасування і зміни часу далі рахуються за НОВИМИ номерами
+    rmap = renumber.get_map(today)
+    for lesson in lessons:
+        new_n = rmap.get(lesson["number"])
+        if new_n is not None:
+            bell = schedule["bells"].get(new_n)
+            lesson["number"] = new_n
+            lesson["start"] = bell["start"] if bell else None
+            lesson["end"] = bell["end"] if bell else None
+            lesson["remote"] = bell is None or new_n in schedule["remote_numbers"]
+    for lesson in lessons:
+        lesson["cancelled"] = lesson["number"] in cancelled
 
     # разові зміни часу дзвінка (/settime, /endnow) - перекривають
     # стандартний час тільки для цього уроку і цієї дати

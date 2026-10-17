@@ -24,6 +24,7 @@ import extra_lessons
 import holidays
 import lessons
 import remote_overrides
+import renumber
 import settings
 
 log = logging.getLogger("api")
@@ -121,7 +122,7 @@ def _day_block(d: date) -> dict:
                 "early_end": early_end.get_early_end(d, l["number"]),
                 "extra": l["number"] in extra_nums,
             })
-    return {"school": lessons.is_school_week(d), "holiday": hol, "lessons": items}
+    return {"school": lessons.is_school_week(d), "holiday": hol, "lessons": items, "renumbered": bool(renumber.get_map(d))}
 
 
 async def state(request: web.Request) -> web.Response:
@@ -229,6 +230,8 @@ async def a_overview(request: web.Request) -> web.Response:
         d = today + timedelta(days=i)
         if d.weekday() > 4 or holidays.get_holiday(d):
             continue
+        if renumber.get_map(d):
+            changes.append({"date": d.isoformat(), "number": None, "name": "Нумерація уроків", "kind": "renumber", "text": "змінено порядок номерів"})
         for l in lessons.get_lessons_for_date(d):
             n = l["number"]
             base = {"date": d.isoformat(), "number": n, "name": l["name"]}
@@ -257,6 +260,50 @@ async def a_overview(request: web.Request) -> web.Response:
             "region": config.REGION_TITLE,
         },
     })
+
+
+def _swap_flags(d: date, a: int, b: int) -> None:
+    """Після зміни номерів прапорці (скасовано / очно) йдуть за уроком, а час і дострокове завершення скидаються."""
+    ca = cancellations.get_cancelled_numbers(d)
+    a_c, b_c = a in ca, b in ca
+    a_p, b_p = remote_overrides.is_in_person(d, a), remote_overrides.is_in_person(d, b)
+    for n, c, p in ((a, b_c, b_p), (b, a_c, a_p)):
+        if c:
+            cancellations.cancel_lesson(d, n)
+        else:
+            cancellations.uncancel_lesson(d, n)
+        if p:
+            remote_overrides.mark_in_person(d, n)
+        else:
+            remote_overrides.clear_in_person(d, n)
+        bell_overrides.clear_override(d, n)
+        early_end.clear_early_end(d, n)
+
+
+async def a_renumber(request: web.Request) -> web.Response:
+    _need_admin(request)
+    b = await request.json()
+    d = _d(b["date"])
+    if b.get("reset"):
+        renumber.clear(d)
+        return web.json_response({"ok": True})
+    cur, tgt = int(b["number"]), int(b["target"])
+    if tgt not in lessons.load_schedule()["bells"]:
+        raise ValueError("target")
+    if cur == tgt:
+        return web.json_response({"ok": True})
+    current = {l["number"] for l in lessons.get_lessons_for_date(d)}
+    extra = {e["number"] for e in extra_lessons.get_extra_lessons(d)}
+    if cur not in current or cur in extra or tgt in extra:
+        raise ValueError("number")
+    rmap = renumber.get_map(d)
+    inv = {v: k for k, v in rmap.items()}
+    rmap[inv.get(cur, cur)] = tgt
+    if tgt in current:  # слот зайнятий - уроки міняються місцями
+        rmap[inv.get(tgt, tgt)] = cur
+    renumber.set_map(d, {k: v for k, v in rmap.items() if k != v})
+    _swap_flags(d, cur, tgt)
+    return web.json_response({"ok": True})
 
 
 async def a_holiday(request: web.Request) -> web.Response:
@@ -292,6 +339,7 @@ async def start(bot, watcher) -> web.AppRunner:
     app.router.add_post("/api/admin/lesson", a_lesson)
     app.router.add_post("/api/admin/holiday", a_holiday)
     app.router.add_post("/api/admin/endnow", a_endnow)
+    app.router.add_post("/api/admin/renumber", a_renumber)
     app.router.add_post("/api/admin/inperson", a_inperson)
     app.router.add_post("/api/admin/settings", a_settings)
     app.router.add_get("/api/admin/overview", a_overview)
