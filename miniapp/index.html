@@ -35,15 +35,26 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .map-card h2{margin:0;padding:15px 16px 11px}
 .map-card iframe{display:block;width:100%;height:360px;border:0;background:var(--surface)}
 @media(max-width:480px){.map-card iframe{height:min(58vh,420px);min-height:300px}}
-/* Liquid glass surfaces and calm interaction motion */
-.pill,.box,.map-card,.sheet .p{background:color-mix(in srgb,var(--card) 82%,transparent);border:1px solid color-mix(in srgb,var(--tx) 12%,transparent);backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4)}
-.hero:not(.live):not(.hol){background:color-mix(in srgb,var(--card) 84%,transparent);backdrop-filter:blur(18px) saturate(1.35);-webkit-backdrop-filter:blur(18px) saturate(1.35)}
-.tabs{background:linear-gradient(145deg,color-mix(in srgb,var(--bg) 76%,transparent),color-mix(in srgb,var(--card) 76%,transparent));border-top-color:color-mix(in srgb,var(--tx) 13%,transparent);box-shadow:0 -8px 28px color-mix(in srgb,var(--tx) 6%,transparent)}
-.pill,.box,.hero,.map-card,.ban,.go,.tabs button,.strip button,.b2{transition:transform .22s cubic-bezier(.2,.75,.25,1),box-shadow .24s ease,border-color .22s ease,background-color .22s ease}
-@media(hover:hover){.pill:hover,.box:hover,.map-card:hover{border-color:color-mix(in srgb,var(--ac) 24%,var(--line));box-shadow:0 12px 30px color-mix(in srgb,var(--tx) 10%,transparent)}.go:hover,.b2:hover{transform:translateY(-2px);filter:brightness(1.04)}}
-button:active{transform:scale(.98)}
-.go:active,.strip button:active{transform:scale(.975)}
-@media(prefers-reduced-motion:reduce){button:active,.go:hover,.b2:hover,.pill:hover,.box:hover,.map-card:hover{transform:none!important}}
+/* Liquid glass: a soft color field behind translucent, highlighted surfaces. */
+body{background-color:var(--bg);background-image:radial-gradient(ellipse at 8% 5%,color-mix(in srgb,var(--ac) 20%,transparent),transparent 42%),radial-gradient(ellipse at 94% 34%,color-mix(in srgb,#9b72ed 15%,transparent),transparent 38%),radial-gradient(ellipse at 35% 92%,color-mix(in srgb,#27b99a 12%,transparent),transparent 42%);background-attachment:fixed}
+.pill,.box,.map-card,.sheet .p,.empty{background:color-mix(in srgb,var(--card) 64%,transparent);border:1px solid color-mix(in srgb,white 35%,var(--line));backdrop-filter:blur(26px) saturate(1.65);-webkit-backdrop-filter:blur(26px) saturate(1.65);box-shadow:0 12px 34px color-mix(in srgb,var(--tx) 8%,transparent),inset 0 1px 0 color-mix(in srgb,white 58%,transparent)}
+.box,.pill,.map-card,.hero{position:relative}
+.box::before,.pill::before,.map-card::before,.hero:not(.live):not(.hol)::before{content:"";position:absolute;inset:0 0 auto;height:48%;border-radius:inherit;background:linear-gradient(155deg,color-mix(in srgb,white 32%,transparent),transparent 74%);pointer-events:none}
+.box>* ,.pill>* ,.map-card>* ,.hero>*{position:relative;z-index:1}
+.hero:not(.live):not(.hol){background:color-mix(in srgb,var(--card) 62%,transparent);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);box-shadow:0 16px 38px color-mix(in srgb,var(--tx) 10%,transparent),inset 0 1px 0 color-mix(in srgb,white 55%,transparent)}
+.map-card{background:color-mix(in srgb,var(--card) 62%,transparent)}
+.sheet{background:color-mix(in srgb,#080d18 50%,transparent);backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2)}.sheet .p{background:color-mix(in srgb,var(--card) 76%,transparent);border-radius:30px 30px 0 0;box-shadow:0 -18px 56px rgba(0,0,0,.24),inset 0 1px 0 color-mix(in srgb,white 64%,transparent)}
+.tabs{background:linear-gradient(145deg,color-mix(in srgb,var(--bg) 60%,transparent),color-mix(in srgb,var(--card) 64%,transparent));border-top-color:color-mix(in srgb,white 32%,var(--line));box-shadow:0 -10px 34px color-mix(in srgb,var(--tx) 12%,transparent),inset 0 1px 0 color-mix(in srgb,white 44%,transparent);backdrop-filter:blur(30px) saturate(1.7);-webkit-backdrop-filter:blur(30px) saturate(1.7)}
+.tabs .on{background:color-mix(in srgb,var(--card) 58%,transparent);border:1px solid color-mix(in srgb,white 42%,var(--line));box-shadow:0 5px 16px color-mix(in srgb,var(--tx) 10%,transparent),inset 0 1px 0 color-mix(in srgb,white 72%,transparent)}
+.ban,.go{position:relative;overflow:hidden}.ban::after,.go::after{content:"";position:absolute;inset:-70% auto -70% -30%;width:35%;transform:rotate(18deg);background:linear-gradient(90deg,transparent,color-mix(in srgb,white 30%,transparent),transparent);animation:glint 5.8s ease-in-out infinite}
+.pill,.box,.hero,.map-card,.ban,.go,.tabs button,.strip button,.b2{transition:transform .28s cubic-bezier(.2,.75,.25,1),box-shadow .3s ease,border-color .25s ease,background-color .25s ease}
+@media(hover:hover){.pill:hover,.box:hover,.map-card:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--ac) 38%,var(--line));box-shadow:0 16px 38px color-mix(in srgb,var(--tx) 12%,transparent),inset 0 1px 0 color-mix(in srgb,white 62%,transparent)}.go:hover,.b2:hover{transform:translateY(-2px);filter:brightness(1.06)}}
+button:active{transform:scale(.975)}.go:active,.strip button:active{transform:scale(.96)}
+@keyframes rise{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes glint{0%,72%,100%{left:-35%}40%{left:125%}}
+#app.entering>.top,#app.entering>.hero,#app.entering>.al,#app.entering>.strip,#app.entering>.nav,#app.entering>.box,#app.entering>.row,#app.entering>.map-card,#app.entering>.st,#app.entering>h2{animation:rise .48s cubic-bezier(.2,.75,.25,1) both}
+#app.entering>:nth-child(2){animation-delay:.035s}#app.entering>:nth-child(3){animation-delay:.07s}#app.entering>:nth-child(4){animation-delay:.105s}#app.entering>:nth-child(5){animation-delay:.14s}
+@media(prefers-reduced-motion:reduce){button:active,.go:hover,.b2:hover,.pill:hover,.box:hover,.map-card:hover{transform:none!important}.ban::after,.go::after{display:none}}
 </style>
 </head>
 <body>
@@ -66,7 +77,7 @@ function kyiv(){const p=Object.fromEntries(new Intl.DateTimeFormat("en-GB",{time
 const iso=d=>d.toISOString().slice(0,10),fd=s=>s.slice(8,10)+"."+s.slice(5,7),U=s=>new Date(s+"T00:00:00Z"),wd=d=>(d.getUTCDay()+6)%7;
 const mins=s=>{const[a,b]=s.split(":");return+a*60+ +b},fm=m=>m>=60?Math.floor(m/60)+" год "+(m%60?m%60+" хв":""):m+" хв";
 const mon=d=>new Date(U(iso(d)).getTime()-wd(d)*D);
-let tab="sch",off=0,sel=null,st=null,offline=false,admin=false,adminDay=null,adminDate=null,adminOv=null,wv=false,curL=null;
+let tab="sch",off=0,sel=null,st=null,offline=false,admin=false,adminDay=null,adminDate=null,adminOv=null,wv=false,curL=null,pageMotion=true;
 const E=l=>l.early_end||l.end;
 let notes={};try{notes=JSON.parse(localStorage.getItem("hw")||"{}")}catch(e){}
 const saveN=()=>{try{localStorage.setItem("hw",JSON.stringify(notes))}catch(e){}};
@@ -171,11 +182,12 @@ function render(){
  if(st&&st.err){A.innerHTML=`<div class="top"><h1>Розклад</h1></div><div class="empty">Не вдалося зв'язатися з ботом.<br><br>${API?"Перевірте, що бот працює і має публічну адресу (Railway: Settings, Networking, Generate Domain).":"Відкрийте застосунок командою /app у боті: адреса бота передається автоматично."}</div><button class="go" onclick="boot()">Спробувати знову</button>`;$("tabs").innerHTML="";return}
  const oldMap=A.querySelector("#alert-map-frame");
  A.innerHTML=tab==="sch"?sch():tab==="al"?alr():tab==="dut"?dutyPage():adm();
+ if(pageMotion){A.classList.add("entering");setTimeout(()=>A.classList.remove("entering"),700);pageMotion=false}
  const newMap=A.querySelector("#alert-map-frame");if(oldMap&&newMap)newMap.replaceWith(oldMap);
  const a=st.alert,T=[["sch","Розклад"],["dut","Чергові"],["al",a.active?"🚨 Тривоги":"Тривоги"]];if(admin)T.push(["adm","Керування"]);
  $("tabs").innerHTML=T.map(([k,n])=>`<button data-t="${k}" class="${k===tab?"on":""}">${n}</button>`).join("");
 }
-$("tabs").onclick=async e=>{const b=e.target.closest("button");if(!b)return;tab=b.dataset.t;hap();if(tab==="adm")await loadAdmin2();if(tab==="dut")await loadDutySchedule();render();scrollTo(0,0)};
+$("tabs").onclick=async e=>{const b=e.target.closest("button");if(!b)return;tab=b.dataset.t;pageMotion=true;hap();if(tab==="adm")await loadAdmin2();if(tab==="dut")await loadDutySchedule();render();scrollTo(0,0)};
 const loadAdmin2=async()=>{await loadAdminDay()};
 $("app").onclick=async e=>{const b=e.target.closest("button");if(!b)return;const D_=b.dataset;
  if(D_.go){tab="al";hap();return render()}
