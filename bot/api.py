@@ -131,6 +131,15 @@ def _day_block(d: date) -> dict:
     return {"school": lessons.is_school_week(d), "holiday": hol, "lessons": items, "ended": ended, "remote_period": remote_periods.get_period(d), "renumbered": bool(renumber.get_map(d))}
 
 
+def _lesson_names() -> list[str]:
+    names = set()
+    for entries in lessons.load_schedule()["days"].values():
+        for entry in entries:
+            values = entry.values() if isinstance(entry, dict) else (entry,)
+            names.update(value for value in values if isinstance(value, str) and value)
+    return sorted(names, key=str.casefold)
+
+
 async def state(request: web.Request) -> web.Response:
     cfg = settings.load()
     if cfg["maintenance"] and _admin(request) is None:
@@ -146,6 +155,7 @@ async def state(request: web.Request) -> web.Response:
         "now": datetime.now(KYIV_TZ).isoformat(timespec="seconds"),
         "alert": _alert_block(watcher),
         "days": {(start + timedelta(days=i)).isoformat(): _day_block(start + timedelta(days=i)) for i in range(n)},
+        "lesson_names": _lesson_names(),
         "holidays": holidays.list_all(),
         "remote_periods": remote_periods.list_all(),
         "week_shifts": week_shifts.list_all(),
