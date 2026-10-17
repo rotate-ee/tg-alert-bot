@@ -114,22 +114,44 @@ def _alert_block(watcher) -> dict:
 
 def _alert_map_block(watcher) -> dict:
     # The browser receives only cached statuses from the bot's regular API poll.
+    oblast_uids = {
+        "автономна республіка крим": "29", "волинська область": "8",
+        "вінницька область": "4", "дніпропетровська область": "9",
+        "донецька область": "28", "житомирська область": "10",
+        "закарпатська область": "11", "запорізька область": "12",
+        "івано-франківська область": "13", "м. київ": "31",
+        "київська область": "14", "кіровоградська область": "15",
+        "луганська область": "16", "львівська область": "27",
+        "миколаївська область": "17", "одеська область": "18",
+        "полтавська область": "19", "рівненська область": "5",
+        "м. севастополь": "29", "сумська область": "20",
+        "тернопільська область": "21", "харківська область": "22",
+        "херсонська область": "23", "хмельницька область": "3",
+        "черкаська область": "24", "чернівецька область": "26",
+        "чернігівська область": "25",
+    }
     areas = {}
     for alert in watcher.active_alerts:
         if alert.get("alert_type") != "air_raid":
             continue
-        oblast_uid = str(alert.get("location_oblast_uid") or "")
+        location_type = alert.get("location_type")
+        location_title = (alert.get("location_title") or "").strip().lower()
+        oblast_title = (alert.get("location_oblast") or alert.get("location_title") or "").strip().lower()
+        oblast_uid = oblast_uids.get(oblast_title)
+        if not oblast_uid and location_type in {"oblast", "city"}:
+            oblast_uid = oblast_uids.get(location_title)
         if not oblast_uid:
             continue
-        if oblast_uid == "30":  # Sevastopol is shown on the map within Crimea.
-            oblast_uid = "29"
-        location_uid = str(alert.get("location_uid") or "")
-        full_region = alert.get("location_type") == "oblast" and location_uid == oblast_uid
+        full_region = location_type == "oblast" or (
+            location_type == "city" and location_title == "м. київ"
+        )
         current = areas.get(oblast_uid)
         level = "yellow" if alert.get("alert_level") == "yellow" else "red"
-        if current is None or (full_region and not current["full"]):
+        if current is None:
             areas[oblast_uid] = {"full": full_region, "level": level}
-        elif level == "red":
+        else:
+            current["full"] = current["full"] or full_region
+        if current is not None and level == "red":
             current["level"] = level
     return {
         "areas": areas,
