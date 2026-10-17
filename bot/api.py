@@ -112,6 +112,29 @@ def _alert_block(watcher) -> dict:
     }
 
 
+def _alert_map_block(watcher) -> dict:
+    # The browser receives only cached statuses from the bot's regular API poll.
+    areas = {}
+    for alert in watcher.active_alerts:
+        if alert.get("alert_type") != "air_raid":
+            continue
+        oblast_uid = str(alert.get("location_oblast_uid") or "")
+        if not oblast_uid:
+            continue
+        location_uid = str(alert.get("location_uid") or "")
+        full_region = alert.get("location_type") == "oblast" and location_uid == oblast_uid
+        current = areas.get(oblast_uid)
+        level = "yellow" if alert.get("alert_level") == "yellow" else "red"
+        if current is None or (full_region and not current["full"]):
+            areas[oblast_uid] = {"full": full_region, "level": level}
+        elif level == "red":
+            current["level"] = level
+    return {
+        "areas": areas,
+        "last_ok": watcher.last_ok.isoformat(timespec="seconds") if watcher.last_ok else None,
+    }
+
+
 def _day_block(d: date) -> dict:
     hol = holidays.get_holiday(d)
     ended = lessons.schedule_ended(d)
@@ -154,6 +177,7 @@ async def state(request: web.Request) -> web.Response:
     return web.json_response({
         "now": datetime.now(KYIV_TZ).isoformat(timespec="seconds"),
         "alert": _alert_block(watcher),
+        "alert_map": _alert_map_block(watcher),
         "days": {(start + timedelta(days=i)).isoformat(): _day_block(start + timedelta(days=i)) for i in range(n)},
         "lesson_names": _lesson_names(),
         "holidays": holidays.list_all(),

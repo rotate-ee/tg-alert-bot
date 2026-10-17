@@ -32,6 +32,7 @@ class AlertWatcher:
         self._was_active = False  # состояние с предыдущего опроса
         self._level: str | None = None  # "red" | "yellow" | None
         self.last_ok: datetime | None = None  # час останнього успішного опитування
+        self.active_alerts: list[dict] = []
 
     @property
     def is_active(self) -> bool:
@@ -75,6 +76,7 @@ class AlertWatcher:
             return None
 
         self.last_ok = datetime.now(ZoneInfo("Europe/Kyiv"))
+        self.active_alerts = alerts
         region_alert = self._find_region_air_raid(alerts)
         is_active = region_alert is not None
         new_level = region_alert.get("alert_level") if region_alert else None
