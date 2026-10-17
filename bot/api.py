@@ -10,7 +10,7 @@ import logging
 import os
 import time as _time
 from datetime import date, datetime, timedelta
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, urlsplit
 from zoneinfo import ZoneInfo
 
 from aiohttp import web
@@ -277,6 +277,10 @@ async def a_settings(request: web.Request) -> web.Response:
     key, value = str(b["key"]), b["value"]
     if key == "schedule_end" and value:
         value = _d(str(value)).isoformat()  # перевірка формату YYYY-MM-DD
+    if key == "remote_lesson_url":
+        value = str(value).strip()
+        if len(value) > 2048 or (value and (urlsplit(value).scheme != "https" or not urlsplit(value).netloc)):
+            raise ValueError("remote_lesson_url")
     settings.set_value(key, value)
     return web.json_response({"ok": True, "settings": settings.load()})
 
