@@ -121,6 +121,8 @@ def _alert_map_block(watcher) -> dict:
         oblast_uid = str(alert.get("location_oblast_uid") or "")
         if not oblast_uid:
             continue
+        if oblast_uid == "30":  # Sevastopol is shown on the map within Crimea.
+            oblast_uid = "29"
         location_uid = str(alert.get("location_uid") or "")
         full_region = alert.get("location_type") == "oblast" and location_uid == oblast_uid
         current = areas.get(oblast_uid)
