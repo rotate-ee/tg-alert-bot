@@ -44,7 +44,6 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 button:active{transform:scale(.98)}
 .go:active,.strip button:active{transform:scale(.975)}
 @media(prefers-reduced-motion:reduce){button:active,.go:hover,.b2:hover,.pill:hover,.box:hover,.map-card:hover{transform:none!important}}
-.hw-editor{margin:14px 0 16px;padding:14px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--card) 76%,transparent)}.hw-editor h3{font-size:16px;margin:0 0 8px}.hw-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}.hw-item input[type=checkbox],.hw-main-item input[type=checkbox]{width:21px;min-width:21px;height:21px;min-height:21px;margin:0;accent-color:var(--ac)}.hw-main{flex:1;min-width:0}.hw-main b{display:block;font-size:14px;line-height:1.35}.hw-main small{display:block;margin-top:3px;font-size:12px}.hw-item.done .hw-main{opacity:.52;text-decoration:line-through}.hw-delete{width:32px;height:32px;border-radius:10px;background:var(--surface);color:var(--rd);font-size:20px;line-height:1}.hw-empty{padding:9px 0}.hw-editor>input{margin-top:11px}.hw-editor .two{align-items:stretch}.hw-editor .two input,.hw-editor .two .go{margin:0}.hw-main-item{display:flex;align-items:center;gap:12px}
 </style>
 </head>
 <body>
@@ -71,12 +70,8 @@ let tab="sch",off=0,sel=null,st=null,offline=false,admin=false,adminDay=null,adm
 const E=l=>l.early_end||l.end;
 let notes={};try{notes=JSON.parse(localStorage.getItem("hw")||"{}")}catch(e){}
 const saveN=()=>{try{localStorage.setItem("hw",JSON.stringify(notes))}catch(e){}};
-let homework={};try{homework=JSON.parse(localStorage.getItem("homework_tasks_v1")||"{}");if(!homework||typeof homework!=="object")homework={}}catch(e){}
-const saveHomework=()=>{try{localStorage.setItem("homework_tasks_v1",JSON.stringify(homework))}catch(e){}};
-const makeTaskId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
-const taskBadge=k=>{const a=homework[k]||[];return a.length?`${a.filter(x=>x.done).length}/${a.length}`:notes[k]?"📝":""};
-const homeworkMarkup=k=>{const a=homework[k]||[];return a.length?a.map(x=>`<div class="hw-item ${x.done?"done":""}"><input type="checkbox" data-hw-toggle="${esc(x.id)}" ${x.done?"checked":""} aria-label="Позначити виконаним"><div class="hw-main"><b>${esc(x.text)}</b><small>${x.due?`До ${fd(x.due)}`:"Без терміну"}${x.due&&x.due<iso(kyiv())&&!x.done?" · прострочено":""}</small></div><button type="button" class="hw-delete" data-hw-delete="${esc(x.id)}" aria-label="Видалити завдання">×</button></div>`).join(""):`<div class="sm hw-empty">Поки що завдань немає</div>`};
-const homeworkEditor=k=>`<section class="hw-editor"><h3>Домашні завдання</h3><div id="hw-rows">${homeworkMarkup(k)}</div><input id="hw-input" maxlength="160" placeholder="Наприклад: вправа 12"><div class="two"><input id="hw-due" type="date" aria-label="Термін виконання"><button class="go" id="hw-add" type="button">Додати</button></div></section>`;
+try{localStorage.removeItem("homework_tasks_v1")}catch(e){}
+const taskBadge=k=>notes[k]?"📝":"";
 const hap=()=>{try{tg&&tg.HapticFeedback.selectionChanged()}catch(e){}};
 const toast=t=>{const e=$("toast");e.textContent=t;e.classList.add("on");setTimeout(()=>e.classList.remove("on"),1800)};
 const sheet=h=>{$("panel").innerHTML=h;$("sheet").classList.add("on")},closeSheet=()=>$("sheet").classList.remove("on");
@@ -117,10 +112,8 @@ function sch(){
  else if(nx){h+=`<div class="hero"><div class="k">${cur<mins(live[0].start)?"Уроки ще не почались":"Перерва"}</div><div class="t">${esc(nx.name)}</div><div class="k">${nx.number}-й урок о ${nx.start}${nx.room?", каб. "+esc(nx.room):""}, через ${fm(mins(nx.start)-cur)}</div></div>`}
  else h+=`<div class="hero"><div class="t">Уроки закінчились</div></div>`;
  if(!c&&nx&&cur>=mins(live[0].start))h+=airMap();
- h+=L.map(l=>{const k=sel+"|"+l.number,hw=homework[k]||[],past=isT?cur>=mins(E(l)):sel<t,now_=isT&&!l.cancelled&&cur>=mins(l.start)&&cur<mins(E(l));
+ h+=L.map(l=>{const k=sel+"|"+l.number,past=isT?cur>=mins(E(l)):sel<t,now_=isT&&!l.cancelled&&cur>=mins(l.start)&&cur<mins(E(l));
   return `<button class="row ${l.cancelled?"cx ":""}${past?"past ":""}${now_?"now":""}" data-n="${l.number}" style="--c:${col(l.name)}"><div class="tm">${l.start}<span>${E(l)}</span></div><div class="cl"></div><div class="bd"><b>${esc(l.name)}</b><span>${l.number}-й урок${l.room?", каб. "+esc(l.room):""}${l.remote?", дистанційно":""}${l.early_end?", закінчився раніше":""}${l.cancelled?' <i class="tag">скасовано</i>':""}</span></div><div class="nb">${taskBadge(k)}</div></button>`}).join("");
- const pending=Object.entries(homework).flatMap(([key,list])=>(Array.isArray(list)?list:[]).filter(x=>!x.done).map(x=>({key,...x}))).sort((a,b)=>(a.due||a.key.slice(0,10)).localeCompare(b.due||b.key.slice(0,10)));
- if(pending.length)h+=`<h2>Домашні завдання</h2>`+pending.map(x=>{const date=x.key.slice(0,10);return `<div class="box hw-main-item"><input type="checkbox" data-hw-toggle="${esc(x.id)}" data-hw-key="${esc(x.key)}" aria-label="Позначити виконаним"><div class="hw-main"><b>${esc(x.text)}</b><small>${fd(date)}, ${x.key.split("|")[1]}-й урок · ${x.due?`до ${fd(x.due)}`:"без терміну"}</small></div></div>`}).join("");
  const nh=st.holidays.filter(x=>x.to>=t).slice(0,3);
  if(nh.length)h+=`<h2>Канікули</h2>`+nh.map(x=>{const d=Math.round((U(x.from)-U(t))/D);return `<div class="box"><b>${esc(x.title)}</b><span class="sm">${fd(x.from)} – ${fd(x.to)}, ${d>0?"через "+d+" дн.":"тривають"}</span></div>`}).join("");
  const ni=Object.keys(notes).filter(k=>k.slice(0,10)>=t&&notes[k]).sort().slice(0,5);
@@ -177,12 +170,10 @@ $("app").onclick=async e=>{const b=e.target.closest("button");if(!b)return;const
  if(D_.d||D_.wv!==undefined){if(D_.d)sel=D_.d;hap();return render()}
  if(D_.w!==undefined){off=D_.w==="0"?0:off+ +D_.w;sel=null;hap();await load();return render()}
  if(D_.n){const l=st.days[sel].lessons.find(x=>x.number==D_.n),k=sel+"|"+l.number;
-  return sheet(`<h3 style="margin:0 0 2px;font-size:20px">${esc(l.name)}</h3><div class="sm" style="margin-bottom:12px">${DF[wd(U(sel))]}, ${fd(sel)}, ${l.number}-й урок</div>${homeworkEditor(k)}<label>Нотатка до уроку</label><textarea id="ta" rows="4" placeholder="Що задали або що взяти з собою">${esc(notes[k]||"")}</textarea><button class="go" id="sv">Зберегти</button>${notes[k]?'<button class="go" id="dl" style="background:var(--card);color:var(--tx)">Видалити</button>':""}`),
-  $("sv").onclick=()=>{const v=$("ta").value.trim();if(v)notes[k]=v;else delete notes[k];saveN();closeSheet();render()},
-    $("dl")&&($("dl").onclick=()=>{delete notes[k];saveN();closeSheet();render()}),
-  $("hw-add").onclick=()=>{const input=$("hw-input"),text=input.value.trim();if(!text)return;const due=$("hw-due").value;homework[k]||=[];homework[k].push({id:makeTaskId(),text,due,done:false});saveHomework();input.value="";$("hw-rows").innerHTML=homeworkMarkup(k);const row=$("app").querySelector(`[data-n="${l.number}"] .nb`);if(row)row.innerHTML=taskBadge(k)},
-  $("hw-rows").onchange=e=>{const id=e.target.dataset.hwToggle;if(!id)return;const task=(homework[k]||[]).find(x=>x.id===id);if(!task)return;task.done=e.target.checked;saveHomework();$("hw-rows").innerHTML=homeworkMarkup(k);const row=$("app").querySelector(`[data-n="${l.number}"] .nb`);if(row)row.innerHTML=taskBadge(k)},
-  $("hw-rows").onclick=e=>{const b=e.target.closest("[data-hw-delete]");if(!b)return;homework[k]=(homework[k]||[]).filter(x=>x.id!==b.dataset.hwDelete);saveHomework();$("hw-rows").innerHTML=homeworkMarkup(k);const row=$("app").querySelector(`[data-n="${l.number}"] .nb`);if(row)row.innerHTML=taskBadge(k)}}
+  sheet(`<h3 style="margin:0 0 2px;font-size:20px">${esc(l.name)}</h3><div class="sm" style="margin-bottom:12px">${DF[wd(U(sel))]}, ${fd(sel)}, ${l.number}-й урок</div><label>Нотатка до уроку</label><textarea id="ta" rows="4" placeholder="Нотатка до уроку або що взяти з собою">${esc(notes[k]||"")}</textarea><button class="go" id="sv">Зберегти</button>${notes[k]?'<button class="go" id="dl" style="background:var(--card);color:var(--tx)">Видалити</button>':""}`);
+  $("sv").onclick=()=>{const v=$("ta").value.trim();if(v)notes[k]=v;else delete notes[k];saveN();closeSheet();render()};
+  if($("dl"))$("dl").onclick=()=>{delete notes[k];saveN();closeSheet();render()};
+  return}
  if(tab!=="adm")return;
  if(D_.al){curL=adminDay.lessons.find(x=>x.number==D_.al);const l=curL,nowT=new Date().toLocaleTimeString("en-GB",{timeZone:"Europe/Kyiv",hour:"2-digit",minute:"2-digit"}),sc='style="background:var(--card);color:var(--tx)"';
   return sheet(`<h3 style="margin:0 0 2px;font-size:20px">${l.number}. ${esc(l.name)}</h3><div class="sm" style="margin-bottom:10px">${fd(adminDate)}, ${l.start}–${E(l)}</div><button class="go" data-a="cx">${l.cancelled?"Повернути урок":"Скасувати урок"}</button><button class="go" ${sc} data-a="tm">Змінити час</button>${l.extra?"":`<button class="go" ${sc} data-a="rn">Змінити номер уроку</button>`}${l.early_end?`<button class="go" ${sc} data-a="enc">Скасувати дострокове завершення (${l.early_end})</button>`:`<div class="two" style="margin-top:8px"><input type="time" id="et" value="${nowT}" style="margin:0"><button class="go" ${sc} style="margin:0;background:var(--card);color:var(--tx)" data-a="en">Завершити о цій годині</button></div>`}${l.remote_capable?`<button class="go" ${sc} data-a="ip">${l.remote?"Буде очно":"Зробити дистанційним"}</button>`:""}${l.extra?`<button class="go" ${sc} data-a="rm" style="background:var(--card);color:var(--rd)">Видалити додатковий урок</button>`:""}`)}
@@ -208,7 +199,7 @@ $("panel").onclick=e=>{const b=e.target.closest("[data-a]");if(!b||!curL)return;
  if(k==="enc")return act(()=>post("/api/admin/endnow",{date,number:n,clear:true}),"Завершення скасовано");
  if(k==="ip")return act(()=>post("/api/admin/inperson",{date,number:n,value:l.remote}),l.remote?"Урок буде очно":"Позначено дистанційним");
  if(k==="rm")return act(()=>post("/api/admin/lesson",{date,number:n,remove:true}),"Урок видалено")};
-$("app").onchange=async e=>{if(e.target.dataset.hwToggle&&e.target.dataset.hwKey){const list=homework[e.target.dataset.hwKey]||[],task=list.find(x=>x.id===e.target.dataset.hwToggle);if(task){task.done=e.target.checked;homework[e.target.dataset.hwKey]=list;saveHomework();render()}return}if(e.target.id==="ad"&&e.target.value){adminDate=e.target.value;await loadAdminDay();render()}
+$("app").onchange=async e=>{if(e.target.id==="ad"&&e.target.value){adminDate=e.target.value;await loadAdminDay();render()}
  if(e.target.id==="mnt")act(()=>post("/api/admin/settings",{key:"maintenance",value:e.target.checked}),e.target.checked?"Технічні роботи увімкнено":"Застосунок знову відкрито");
  if(e.target.id==="mute")act(()=>post("/api/admin/settings",{key:"alerts_muted",value:!e.target.checked}),e.target.checked?"Сповіщення увімкнено":"Сповіщення вимкнено")};
 async function boot(){await load();if(!st.err)await loadAdmin();render()}

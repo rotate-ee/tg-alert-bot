@@ -73,7 +73,6 @@ REMOTE_CONFIRM_TIME = os.getenv("REMOTE_CONFIRM_TIME", "12:00").strip()
 # нагадування в чат. "off" або "0" - вимкнути нагадування.
 _reminder_raw = os.getenv("LESSON_REMINDER_MINUTES", "5").strip()
 LESSON_REMINDER_MINUTES = None if _reminder_raw.lower() in ("off", "0", "") else int(_reminder_raw)
-SCHEDULE_CHANGE_NOTIFICATIONS = os.getenv("SCHEDULE_CHANGE_NOTIFICATIONS", "true").strip().lower() == "true"
 
 # Во сколько (Europe/Kyiv, ЧЧ:ММ) у неділю ввечері слати окреме
 # повідомлення адмінам про тип наступного тижня (школа/вдома).

@@ -68,18 +68,6 @@ def _hhmm(raw: str) -> str:
     return f"{int(h):02d}:{int(m):02d}"
 
 
-async def _notify_schedule_change(request: web.Request, d: date, details: str) -> None:
-    """Повідомляє групу про зміну розкладу з міні-застосунку."""
-    if not config.SCHEDULE_CHANGE_NOTIFICATIONS:
-        return
-    text = f"📢 Зміни в розкладі\n{d.strftime('%d.%m.%Y')}\n{details}"
-    try:
-        await request.app["bot"].send_message(config.CHAT_ID, text)
-    except Exception:
-        # Зміна вже збережена: помилка відправлення не має робити API-запит невдалим.
-        log.exception("Не вдалося надіслати повідомлення про зміну розкладу")
-
-
 @web.middleware
 async def cors(request: web.Request, handler):
     if request.method == "OPTIONS":
@@ -174,11 +162,8 @@ async def a_cancel(request: web.Request) -> web.Response:
     d, num = _d(b["date"]), int(b["number"])
     if b.get("cancel", True):
         cancellations.cancel_lesson(d, num)
-        details = f"Урок №{num} скасовано."
     else:
         cancellations.uncancel_lesson(d, num)
-        details = f"Урок №{num} повернули до розкладу."
-    await _notify_schedule_change(request, d, details)
     return web.json_response({"ok": True})
 
 
@@ -188,12 +173,9 @@ async def a_time(request: web.Request) -> web.Response:
     d, num = _d(b["date"]), int(b["number"])
     if b.get("clear"):
         bell_overrides.clear_override(d, num)
-        details = f"Для уроку №{num} повернули стандартний час."
     else:
         start, end = _hhmm(b["start"]), _hhmm(b["end"])
         bell_overrides.set_override(d, num, start, end)
-        details = f"Змінено час уроку №{num}: {start}–{end}."
-    await _notify_schedule_change(request, d, details)
     return web.json_response({"ok": True})
 
 
@@ -203,15 +185,12 @@ async def a_lesson(request: web.Request) -> web.Response:
     d, num = _d(b["date"]), int(b["number"])
     if b.get("remove"):
         extra_lessons.remove_extra_lesson(d, num)
-        details = f"Додатковий урок №{num} прибрали з розкладу."
     else:
         name = str(b["name"]).strip()[:60]
         if not name:
             raise ValueError("name")
         start, end = _hhmm(b["start"]), _hhmm(b["end"])
         extra_lessons.add_extra_lesson(d, num, name, start, end)
-        details = f"Додано урок №{num}: {name}, {start}–{end}."
-    await _notify_schedule_change(request, d, details)
     return web.json_response({"ok": True})
 
 
@@ -221,12 +200,9 @@ async def a_endnow(request: web.Request) -> web.Response:
     d, num = _d(b["date"]), int(b["number"])
     if b.get("clear"):
         early_end.clear_early_end(d, num)
-        details = f"Для уроку №{num} скасували дострокове завершення."
     else:
         end = _hhmm(b["time"]) if b.get("time") else datetime.now(KYIV_TZ).strftime("%H:%M")
         early_end.mark_early_end(d, num, end)
-        details = f"Урок №{num} завершиться достроково о {end}."
-    await _notify_schedule_change(request, d, details)
     return web.json_response({"ok": True})
 
 
@@ -236,11 +212,8 @@ async def a_inperson(request: web.Request) -> web.Response:
     d, num = _d(b["date"]), int(b["number"])
     if b.get("value", True):
         remote_overrides.mark_in_person(d, num)
-        details = f"Урок №{num} підтверджено очно."
     else:
         remote_overrides.clear_in_person(d, num)
-        details = f"Для уроку №{num} прибрали позначку про очне навчання."
-    await _notify_schedule_change(request, d, details)
     return web.json_response({"ok": True})
 
 
@@ -316,7 +289,6 @@ async def a_renumber(request: web.Request) -> web.Response:
     d = _d(b["date"])
     if b.get("reset"):
         renumber.clear(d)
-        await _notify_schedule_change(request, d, "Нумерацію уроків повернули до стандартної.")
         return web.json_response({"ok": True})
     cur, tgt = int(b["number"]), int(b["target"])
     if tgt != 0 and tgt not in lessons.load_schedule()["bells"]:
@@ -334,7 +306,6 @@ async def a_renumber(request: web.Request) -> web.Response:
         rmap[inv.get(tgt, tgt)] = cur
     renumber.set_map(d, {k: v for k, v in rmap.items() if k != v})
     _swap_flags(d, cur, tgt)
-    await _notify_schedule_change(request, d, f"Змінено нумерацію уроків: №{cur} → №{tgt}.")
     return web.json_response({"ok": True})
 
 
@@ -342,24 +313,12 @@ async def a_holiday(request: web.Request) -> web.Response:
     _need_admin(request)
     b = await request.json()
     if b.get("remove"):
-        removed = next((h for h in holidays.list_all() if h.get("id") == str(b["remove"])), None)
         holidays.remove(str(b["remove"]))
-        if removed:
-            await _notify_schedule_change(
-                request,
-                _d(removed["from"]),
-                f"Канікули «{removed['title']}» скасовано.",
-            )
     else:
         d1, d2 = _d(b["from"]), _d(b["to"])
         if d2 < d1:
             raise ValueError("range")
-        title = str(b.get("title", ""))[:60]
-        holidays.add(d1, d2, title)
-        period = d1.strftime("%d.%m.%Y")
-        if d2 != d1:
-            period += f"–{d2.strftime('%d.%m.%Y')}"
-        await _notify_schedule_change(request, d1, f"Додано канікули «{title or 'без назви'}» ({period}).")
+        holidays.add(d1, d2, str(b.get("title", ""))[:60])
     return web.json_response({"ok": True, "holidays": holidays.list_all()})
 
 
