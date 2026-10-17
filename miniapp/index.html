@@ -31,6 +31,10 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 @media(max-width:380px){body{padding-left:13px;padding-right:13px}.strip{gap:5px}.strip button{min-height:57px}.row{grid-template-columns:46px 4px minmax(0,1fr) auto;gap:9px}.tabs{padding-left:12px;padding-right:12px}}
 @media(min-width:600px){body{padding-top:28px}.hero{padding:24px}.row{padding-top:14px;padding-bottom:14px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;scroll-behavior:auto!important;transition:none!important}}
+.map-card{overflow:hidden;border:1px solid var(--line);border-radius:18px;background:var(--card);padding:0 0 8px;margin:16px 0 20px;box-shadow:var(--shadow)}
+.map-card h2{margin:0;padding:15px 16px 11px}
+.map-card iframe{display:block;width:100%;height:360px;border:0;background:var(--surface)}
+@media(max-width:480px){.map-card iframe{height:min(58vh,420px);min-height:300px}}
 </style>
 </head>
 <body>
@@ -96,6 +100,7 @@ function sch(){
  else if(c){const p=(cur-mins(c.start))/(mins(E(c))-mins(c.start))*100;h+=`<div class="hero live"><div class="k">Зараз ${c.number}-й урок${c.room?", каб. "+esc(c.room):""}</div><div class="t">${esc(c.name)}</div><div class="bar"><i style="width:${p}%"></i></div><div class="m"><span>${c.start}</span><span>ще ${mins(E(c))-cur} хв</span><span>${E(c)}</span></div></div>`}
  else if(nx){h+=`<div class="hero"><div class="k">${cur<mins(live[0].start)?"Уроки ще не почались":"Перерва"}</div><div class="t">${esc(nx.name)}</div><div class="k">${nx.number}-й урок о ${nx.start}${nx.room?", каб. "+esc(nx.room):""}, через ${fm(mins(nx.start)-cur)}</div></div>`}
  else h+=`<div class="hero"><div class="t">Уроки закінчились</div></div>`;
+ if(!c&&nx&&cur>=mins(live[0].start))h+=airMap();
  h+=L.map(l=>{const k=sel+"|"+l.number,past=isT?cur>=mins(E(l)):sel<t,now_=isT&&!l.cancelled&&cur>=mins(l.start)&&cur<mins(E(l));
   return `<button class="row ${l.cancelled?"cx ":""}${past?"past ":""}${now_?"now":""}" data-n="${l.number}" style="--c:${col(l.name)}"><div class="tm">${l.start}<span>${E(l)}</span></div><div class="cl"></div><div class="bd"><b>${esc(l.name)}</b><span>${l.number}-й урок${l.room?", каб. "+esc(l.room):""}${l.remote?", дистанційно":""}${l.early_end?", закінчився раніше":""}${l.cancelled?' <i class="tag">скасовано</i>':""}</span></div><div class="nb">${notes[k]?"📝":""}</div></button>`}).join("");
  const nh=st.holidays.filter(x=>x.to>=t).slice(0,3);
@@ -104,6 +109,7 @@ function sch(){
  if(ni.length)h+=`<h2>Нагадування</h2>`+ni.map(k=>`<div class="box"><b class="sm">${fd(k.slice(0,10))}, ${k.split("|")[1]}-й урок</b>${esc(notes[k])}</div>`).join("");
  return h}
 function wkv(){const t=iso(kyiv());return Object.keys(st.days).slice(0,5).map(k=>{const d=st.days[k];return `<button class="box" data-d="${k}" data-wv="0" style="width:100%;text-align:left;${k===t?"outline:2px solid var(--ac)":""}"><div class="hl"><b>${DF[wd(U(k))]}, ${fd(k)}</b><span class="sm">${d.holiday?"🌴 "+esc(d.holiday.title):d.school===false?"🏠 вдома":d.school?"🏫 очно":""}</span></div>${d.holiday?"":d.lessons.length?d.lessons.map(l=>`<div class="sm" style="${l.cancelled?"text-decoration:line-through":""}">${l.number}. ${esc(l.name)}, ${l.start}${l.room?", каб. "+esc(l.room):""}</div>`).join(""):'<div class="sm">Уроків немає</div>'}</button>`}).join("")}
+function airMap(){return `<section class="map-card"><h2>Мапа повітряних тривог</h2><iframe id="alert-map-frame" src="https://alerts.in.ua/?embed" title="Мапа повітряних тривог" loading="lazy"></iframe></section>`}
 function alr(){
  const a=st.alert,m=since(a),ago=a.last_ok?Math.floor((Date.now()-Date.parse(a.last_ok))/1e3):null;
  let h=`<div class="top"><div><h1>Тривоги</h1><small>${esc(a.region)}</small></div></div>`;
@@ -113,6 +119,7 @@ function alr(){
  h+=`<div class="st"><div class="box"><span class="sm">Сьогодні тривог</span><b>${a.today.count}</b></div><div class="box"><span class="sm">Загалом</span><b>${a.today.minutes} хв</b></div></div>`;
  h+=`<h2>Історія</h2>`;
  if(!a.history.length)h+=`<div class="empty">Поки що записів немає. Бот почав вести журнал з моменту оновлення.</div>`;
+ h+=airMap();
  const t=iso(kyiv()),y=iso(new Date(U(t)-D));
  h+=a.history.map(x=>{const s=x.start,d=s.slice(0,10),e=x.end,dur=Math.max(0,Math.round(((e?Date.parse(e):Date.now())-Date.parse(s))/6e4));
   return `<div class="box hl"><div><b><i class="dot ${x.level==="red"?"red":""}"></i>${d===t?"Сьогодні":d===y?"Вчора":fd(d)}, ${s.slice(11,16)} – ${e?e.slice(11,16):"триває"}</b><span class="sm">${x.level==="red"?"Червоний":x.level==="yellow"?"Жовтий":"Рівень невідомий"} рівень</span></div><div class="sm">${fm(dur)||"<1 хв"}</div></div>`}).join("");
@@ -136,9 +143,11 @@ function adm(){
  return h}
 function render(){
  const A=$("app");
- if(st&&st.maintenance){A.innerHTML=`<div class="top"><h1>Розклад</h1></div><div class="al yl"><div class="k">Технічні роботи</div><div class="t">Скоро повернемось</div><div class="k">${esc(st.maintenance.message||"Застосунок тимчасово недоступний. Розклад можна дізнатися в чаті командою /today.")}</div></div><button class="go" onclick="boot()">Перевірити знову</button>`;$("tabs").innerHTML="";return}
+ if(st&&st.maintenance){const oldMap=A.querySelector("#alert-map-frame");A.innerHTML=`<div class="top"><h1>Розклад</h1></div><div class="al yl"><div class="k">Технічні роботи</div><div class="t">Скоро повернемось</div><div class="k">${esc(st.maintenance.message||"Застосунок тимчасово недоступний. Розклад можна дізнатися в чаті командою /today.")}</div></div>${airMap()}<button class="go" onclick="boot()">Перевірити знову</button>`;const newMap=A.querySelector("#alert-map-frame");if(oldMap&&newMap)newMap.replaceWith(oldMap);$("tabs").innerHTML="";return}
  if(st&&st.err){A.innerHTML=`<div class="top"><h1>Розклад</h1></div><div class="empty">Не вдалося зв'язатися з ботом.<br><br>${API?"Перевірте, що бот працює і має публічну адресу (Railway: Settings, Networking, Generate Domain).":"Відкрийте застосунок командою /app у боті: адреса бота передається автоматично."}</div><button class="go" onclick="boot()">Спробувати знову</button>`;$("tabs").innerHTML="";return}
+ const oldMap=A.querySelector("#alert-map-frame");
  A.innerHTML=tab==="sch"?sch():tab==="al"?alr():adm();
+ const newMap=A.querySelector("#alert-map-frame");if(oldMap&&newMap)newMap.replaceWith(oldMap);
  const a=st.alert,T=[["sch","Розклад"],["al",a.active?"🚨 Тривоги":"Тривоги"]];if(admin)T.push(["adm","Керування"]);
  $("tabs").innerHTML=T.map(([k,n])=>`<button data-t="${k}" class="${k===tab?"on":""}">${n}</button>`).join("");
 }
