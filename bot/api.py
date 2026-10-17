@@ -192,11 +192,11 @@ def _lesson_names() -> list[str]:
 
 async def state(request: web.Request) -> web.Response:
     cfg = settings.load()
-    if cfg["maintenance"] and _admin(request) is None:
-        # технічні роботи: звичайним користувачам дані не віддаємо
+    if cfg["app_mode"] != "open" and _admin(request) is None:
+        # Do not expose application data to regular users while it is closed.
         return web.json_response({
             "now": datetime.now(KYIV_TZ).isoformat(timespec="seconds"),
-            "maintenance": {"message": cfg["maintenance_message"]},
+            "maintenance": {"mode": cfg["app_mode"], "message": cfg["maintenance_message"]},
         })
     watcher = request.app["watcher"]
     start = _d(request.query["from"]) if "from" in request.query else datetime.now(KYIV_TZ).date()

@@ -1,4 +1,4 @@
-"""Налаштування, які адмін змінює з міні-застосунку без перезапуску: {"alerts_muted": bool}."""
+"""Persistent settings managed by admins from the mini app."""
 import json
 import os
 from pathlib import Path
@@ -8,16 +8,24 @@ DATA_DIR = Path(_data_dir) if _data_dir else Path(__file__).parent / "data"
 DATA_PATH = DATA_DIR / "settings.json"
 DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
 # schedule_end: остання дата дії розкладу (випуск), "" - без обмеження
-DEFAULTS = {"alerts_muted": False, "maintenance": False, "maintenance_message": "", "schedule_end": "2027-08-31", "remote_lesson_links": {}}
+DEFAULTS = {"alerts_muted": False, "maintenance": False, "app_mode": "open", "maintenance_message": "", "schedule_end": "2027-08-31", "remote_lesson_links": {}}
 
 
 def load() -> dict:
     data = dict(DEFAULTS)
+    stored = {}
     try:
         with open(DATA_PATH, encoding="utf-8") as f:
-            data.update(json.load(f))
+            stored = json.load(f)
+            data.update(stored)
     except (OSError, ValueError):
         pass
+    # Migrate installations that only stored the old maintenance checkbox.
+    if "app_mode" not in stored:
+        data["app_mode"] = "maintenance" if data.get("maintenance") else "open"
+    if data.get("app_mode") not in {"open", "maintenance", "stopped"}:
+        data["app_mode"] = "open"
+    data["maintenance"] = data["app_mode"] == "maintenance"
     return data
 
 
@@ -29,8 +37,17 @@ def set_value(key: str, value) -> None:
     if key not in DEFAULTS:
         raise KeyError(key)
     data = load()
-    if key == "maintenance_message":
+    if key == "app_mode":
+        value = str(value)
+        if value not in {"open", "maintenance", "stopped"}:
+            raise ValueError("app_mode")
+        data["maintenance"] = value == "maintenance"
+    elif key == "maintenance":
+        value = bool(value)
+        data["app_mode"] = "maintenance" if value else "open"
+    elif key == "maintenance_message":
         value = str(value).strip()[:300]
-    data[key] = type(DEFAULTS[key])(value)
+    if key != "maintenance":
+        data[key] = type(DEFAULTS[key])(value)
     with open(DATA_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
