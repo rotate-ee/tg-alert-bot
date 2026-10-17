@@ -173,6 +173,20 @@ def _build_day_lessons(
     return lessons
 
 
+def zero_bell(schedule: dict) -> dict | None:
+    """Типовий час 0-го уроку: 45 хв, що закінчується за 5 хв до початку 1-го уроку."""
+    first = schedule["bells"].get(1)
+    if not first:
+        return None
+    h, m = map(int, first["start"].split(":"))
+    end = h * 60 + m - 5
+    start = end - 45
+    if start < 0:
+        return None
+    fmt = lambda x: f"{x // 60:02d}:{x % 60:02d}"
+    return {"start": fmt(start), "end": fmt(end)}
+
+
 def get_today_lessons(now: datetime | None = None) -> list[dict]:
     if now is None:
         now = datetime.now(KYIV_TZ)
@@ -194,7 +208,7 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
     for lesson in lessons:
         new_n = rmap.get(lesson["number"])
         if new_n is not None:
-            bell = schedule["bells"].get(new_n)
+            bell = schedule["bells"].get(new_n) or (zero_bell(schedule) if new_n == 0 else None)
             lesson["number"] = new_n
             lesson["start"] = bell["start"] if bell else None
             lesson["end"] = bell["end"] if bell else None

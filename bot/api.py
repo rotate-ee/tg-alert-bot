@@ -288,7 +288,7 @@ async def a_renumber(request: web.Request) -> web.Response:
         renumber.clear(d)
         return web.json_response({"ok": True})
     cur, tgt = int(b["number"]), int(b["target"])
-    if tgt not in lessons.load_schedule()["bells"]:
+    if tgt != 0 and tgt not in lessons.load_schedule()["bells"]:
         raise ValueError("target")
     if cur == tgt:
         return web.json_response({"ok": True})
