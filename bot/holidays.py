@@ -52,4 +52,7 @@ def get_holiday(d: date) -> dict | None:
     for h in _load():
         if h["from"] <= iso <= h["to"]:
             return h
+    # літо (червень-серпень) - завжди канікули, навіть якщо їх не додано вручну
+    if d.month in (6, 7, 8):
+        return {"id": "summer", "from": f"{d.year}-06-01", "to": f"{d.year}-08-31", "title": "Літні канікули"}
     return None
