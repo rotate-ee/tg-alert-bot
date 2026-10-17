@@ -17,6 +17,7 @@ import holidays
 import remote_overrides
 import remote_periods
 import renumber
+import week_shifts
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 SCHEDULE_PATH = Path(__file__).parent / "schedule.json"
@@ -122,8 +123,7 @@ def is_school_week(d: date) -> bool | None:
     if anchor is None:
         return None
     monday = d - timedelta(days=d.weekday())
-    weeks_diff = (monday - anchor).days // 7
-    return weeks_diff % 2 == 0
+    return week_shifts.resolve(monday, anchor)
 
 
 def week_type_label(d: date) -> str | None:

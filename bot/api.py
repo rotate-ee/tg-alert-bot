@@ -29,6 +29,7 @@ import remote_overrides
 import remote_periods
 import renumber
 import settings
+import week_shifts
 
 log = logging.getLogger("api")
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
@@ -145,6 +146,7 @@ async def state(request: web.Request) -> web.Response:
         "days": {(start + timedelta(days=i)).isoformat(): _day_block(start + timedelta(days=i)) for i in range(n)},
         "holidays": holidays.list_all(),
         "remote_periods": remote_periods.list_all(),
+        "week_shifts": week_shifts.list_all(),
         "settings": settings.load(),
     })
 
@@ -368,6 +370,16 @@ async def a_remote_period(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "remote_periods": remote_periods.list_all()})
 
 
+async def a_week_shift(request: web.Request) -> web.Response:
+    _need_admin(request)
+    b = await request.json()
+    if b.get("remove"):
+        week_shifts.remove(str(b["remove"]))
+    else:
+        week_shifts.add(_d(b["from"]), bool(b["school"]))
+    return web.json_response({"ok": True, "week_shifts": week_shifts.list_all()})
+
+
 async def a_announce(request: web.Request) -> web.Response:
     _need_admin(request)
     b = await request.json()
@@ -390,6 +402,7 @@ async def start(bot, watcher) -> web.AppRunner:
     app.router.add_post("/api/admin/lesson", a_lesson)
     app.router.add_post("/api/admin/holiday", a_holiday)
     app.router.add_post("/api/admin/remote_period", a_remote_period)
+    app.router.add_post("/api/admin/week_shift", a_week_shift)
     app.router.add_post("/api/admin/endnow", a_endnow)
     app.router.add_post("/api/admin/renumber", a_renumber)
     app.router.add_post("/api/admin/inperson", a_inperson)
