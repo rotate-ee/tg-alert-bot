@@ -192,13 +192,14 @@ def _lesson_names() -> list[str]:
 
 async def state(request: web.Request) -> web.Response:
     cfg = settings.load()
+    watcher = request.app["watcher"]
     if cfg["app_mode"] != "open" and _admin(request) is None:
         # Do not expose application data to regular users while it is closed.
         return web.json_response({
             "now": datetime.now(KYIV_TZ).isoformat(timespec="seconds"),
             "maintenance": {"mode": cfg["app_mode"], "message": cfg["maintenance_message"]},
+            "alert_map": _alert_map_block(watcher),
         })
-    watcher = request.app["watcher"]
     start = _d(request.query["from"]) if "from" in request.query else datetime.now(KYIV_TZ).date()
     n = max(1, min(int(request.query.get("days", "7")), MAX_DAYS))
     return web.json_response({
