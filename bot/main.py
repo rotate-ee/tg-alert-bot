@@ -63,11 +63,14 @@ BOT_PUBLIC_URL = _pub
 def _miniapp_url() -> str:
     if not MINIAPP_URL:
         return ""
-    if not BOT_PUBLIC_URL:
-        return MINIAPP_URL
+    from time import time as _now
     from urllib.parse import quote
     sep = "&" if "?" in MINIAPP_URL else "?"
-    return f"{MINIAPP_URL}{sep}api={quote(BOT_PUBLIC_URL, safe='')}"
+    # v=... обходить кеш Telegram/GitHub Pages: кожне відкриття через /app бере свіжу версію сторінки
+    url = f"{MINIAPP_URL}{sep}v={int(_now())}"
+    if BOT_PUBLIC_URL:
+        url += f"&api={quote(BOT_PUBLIC_URL, safe='')}"
+    return url
 
 bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher()
