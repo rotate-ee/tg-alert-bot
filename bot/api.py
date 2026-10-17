@@ -19,13 +19,17 @@ import alert_log
 import bell_overrides
 import cancellations
 import config
+import early_end
 import extra_lessons
 import holidays
 import lessons
+import remote_overrides
+import settings
 
 log = logging.getLogger("api")
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 MAX_DAYS = 31
+STARTED_AT = _time.time()
 
 
 def verify_init_data(init_data: str) -> dict | None:
@@ -106,11 +110,16 @@ def _day_block(d: date) -> dict:
     hol = holidays.get_holiday(d)
     items = []
     if d.weekday() < 5:
+        extra_nums = {e["number"] for e in extra_lessons.get_extra_lessons(d)}
+        school = lessons.is_school_week(d)
         for l in lessons.get_lessons_for_date(d):
             items.append({
                 "number": l["number"], "name": l["name"], "start": l["start"], "end": l["end"],
-                "room": l["room"] if lessons.is_school_week(d) is not False else None,
+                "room": l["room"] if school is not False else None,
                 "cancelled": l["cancelled"], "remote": lessons.is_lesson_remote_today(l, d),
+                "remote_capable": bool(l["remote"]) and school is not False,
+                "early_end": early_end.get_early_end(d, l["number"]),
+                "extra": l["number"] in extra_nums,
             })
     return {"school": lessons.is_school_week(d), "holiday": hol, "lessons": items}
 
@@ -124,6 +133,7 @@ async def state(request: web.Request) -> web.Response:
         "alert": _alert_block(watcher),
         "days": {(start + timedelta(days=i)).isoformat(): _day_block(start + timedelta(days=i)) for i in range(n)},
         "holidays": holidays.list_all(),
+        "settings": settings.load(),
     })
 
 
@@ -174,6 +184,74 @@ async def a_lesson(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def a_endnow(request: web.Request) -> web.Response:
+    _need_admin(request)
+    b = await request.json()
+    d, num = _d(b["date"]), int(b["number"])
+    if b.get("clear"):
+        early_end.clear_early_end(d, num)
+    else:
+        early_end.mark_early_end(d, num, _hhmm(b["time"]) if b.get("time") else datetime.now(KYIV_TZ).strftime("%H:%M"))
+    return web.json_response({"ok": True})
+
+
+async def a_inperson(request: web.Request) -> web.Response:
+    _need_admin(request)
+    b = await request.json()
+    d, num = _d(b["date"]), int(b["number"])
+    if b.get("value", True):
+        remote_overrides.mark_in_person(d, num)
+    else:
+        remote_overrides.clear_in_person(d, num)
+    return web.json_response({"ok": True})
+
+
+async def a_settings(request: web.Request) -> web.Response:
+    _need_admin(request)
+    b = await request.json()
+    settings.set_value(str(b["key"]), b["value"])
+    return web.json_response({"ok": True, "settings": settings.load()})
+
+
+async def a_overview(request: web.Request) -> web.Response:
+    """Усі розпорядження адміна на найближчі 3 тижні + діагностика системи."""
+    _need_admin(request)
+    today = datetime.now(KYIV_TZ).date()
+    changes = []
+    for i in range(21):
+        d = today + timedelta(days=i)
+        if d.weekday() > 4 or holidays.get_holiday(d):
+            continue
+        for l in lessons.get_lessons_for_date(d):
+            n = l["number"]
+            base = {"date": d.isoformat(), "number": n, "name": l["name"]}
+            if l["cancelled"]:
+                changes.append({**base, "kind": "cancel", "text": "скасовано"})
+            if bell_overrides.get_override(d, n):
+                changes.append({**base, "kind": "time", "text": f"час {l['start']}-{l['end']}"})
+            if early_end.get_early_end(d, n):
+                changes.append({**base, "kind": "early", "text": f"завершено о {early_end.get_early_end(d, n)}"})
+            if remote_overrides.is_in_person(d, n):
+                changes.append({**base, "kind": "inperson", "text": "очно (підтверджено)"})
+        for e in extra_lessons.get_extra_lessons(d):
+            changes.append({"date": d.isoformat(), "number": e["number"], "name": e["name"], "kind": "extra", "text": f"додатковий {e['start']}-{e['end']}"})
+    files = {}
+    ddir = cancellations.DATA_DIR
+    for p in sorted(ddir.glob("*.json")):
+        files[p.name] = p.stat().st_size
+    return web.json_response({
+        "changes": changes,
+        "diag": {
+            "data_dir": str(ddir),
+            "persistent": bool(os.getenv("DATA_DIR")),
+            "files": files,
+            "uptime_min": int((_time.time() - STARTED_AT) // 60),
+            "admins": len(config.ADMIN_IDS),
+            "region": config.REGION_TITLE,
+        },
+    })
+
+
 async def a_holiday(request: web.Request) -> web.Response:
     _need_admin(request)
     b = await request.json()
@@ -206,6 +284,10 @@ async def start(bot, watcher) -> web.AppRunner:
     app.router.add_post("/api/admin/time", a_time)
     app.router.add_post("/api/admin/lesson", a_lesson)
     app.router.add_post("/api/admin/holiday", a_holiday)
+    app.router.add_post("/api/admin/endnow", a_endnow)
+    app.router.add_post("/api/admin/inperson", a_inperson)
+    app.router.add_post("/api/admin/settings", a_settings)
+    app.router.add_get("/api/admin/overview", a_overview)
     app.router.add_post("/api/admin/announce", a_announce)
     app.router.add_get("/", lambda r: web.Response(text="ok"))
     runner = web.AppRunner(app)

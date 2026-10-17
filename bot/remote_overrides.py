@@ -52,3 +52,19 @@ def mark_in_person(d: date, number: int) -> None:
 def is_in_person(d: date, number: int) -> bool:
     data = _load()
     return number in set(data.get(_key(d), []))
+
+
+def clear_in_person(d: date, number: int) -> bool:
+    """Скасувати підтвердження "очно" - урок знову дистанційний за замовчуванням."""
+    data = _load()
+    k = _key(d)
+    nums = set(data.get(k, []))
+    if number not in nums:
+        return False
+    nums.discard(number)
+    if nums:
+        data[k] = sorted(nums)
+    else:
+        data.pop(k, None)
+    _save(data)
+    return True

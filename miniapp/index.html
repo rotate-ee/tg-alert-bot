@@ -78,7 +78,8 @@ function kyiv(){const p=Object.fromEntries(new Intl.DateTimeFormat("en-GB",{time
 const iso=d=>d.toISOString().slice(0,10),fd=s=>s.slice(8,10)+"."+s.slice(5,7),U=s=>new Date(s+"T00:00:00Z"),wd=d=>(d.getUTCDay()+6)%7;
 const mins=s=>{const[a,b]=s.split(":");return+a*60+ +b},fm=m=>m>=60?Math.floor(m/60)+" год "+(m%60?m%60+" хв":""):m+" хв";
 const mon=d=>new Date(U(iso(d)).getTime()-wd(d)*D);
-let tab="sch",off=0,sel=null,st=null,offline=false,admin=false,adminDay=null,adminDate=null;
+let tab="sch",off=0,sel=null,st=null,offline=false,admin=false,adminDay=null,adminDate=null,adminOv=null,wv=false,curL=null;
+const E=l=>l.early_end||l.end;
 let notes={};try{notes=JSON.parse(localStorage.getItem("hw")||"{}")}catch(e){}
 const saveN=()=>{try{localStorage.setItem("hw",JSON.stringify(notes))}catch(e){}};
 const hap=()=>{try{tg&&tg.HapticFeedback.selectionChanged()}catch(e){}};
@@ -98,31 +99,35 @@ async function load(){
  if(st.days&&!st.days[sel])sel=st.base;
 }
 async function loadAdmin(){try{admin=(await get("/api/me")).admin}catch(e){admin=false}}
-async function loadAdminDay(){adminDate=adminDate||iso(kyiv());try{adminDay=(await get(`/api/state?from=${adminDate}&days=1`)).days[adminDate]}catch(e){adminDay=null}}
+async function loadAdminDay(){adminDate=adminDate||iso(kyiv());try{adminDay=(await get(`/api/state?from=${adminDate}&days=1`)).days[adminDate]}catch(e){adminDay=null}try{adminOv=await get("/api/admin/overview")}catch(e){adminOv=null}}
+const act=async(fn,ok)=>{try{await fn();toast(ok);await load();await loadAdminDay();render()}catch(x){toast("Помилка: "+(x===403?"немає прав":"спробуйте ще раз"))}};
+const undo=c=>c.kind==="cancel"?post("/api/admin/cancel",{date:c.date,number:c.number,cancel:false}):c.kind==="time"?post("/api/admin/time",{date:c.date,number:c.number,clear:true}):c.kind==="early"?post("/api/admin/endnow",{date:c.date,number:c.number,clear:true}):c.kind==="inperson"?post("/api/admin/inperson",{date:c.date,number:c.number,value:false}):post("/api/admin/lesson",{date:c.date,number:c.number,remove:true});
 
 function banner(){const a=st.alert;return `<button class="ban ${a.active?cls(a):""}" data-go="al">${a.active?"🚨 "+lvl(a):"🟢 Тривоги немає"}<span>${a.active&&since(a)!==null?dur(since(a)):"Детальніше"}</span></button>`}
 function sch(){
  const now=kyiv(),t=iso(now),cur=now.getUTCHours()*60+now.getUTCMinutes(),day=st.days[sel],L=day.lessons;
  const days=Object.keys(st.days).slice(0,5);
- let h=`<div class="top"><div><h1>${DF[wd(U(sel))]}</h1><small>${fd(sel)}.${sel.slice(0,4)}</small></div><div class="pill">${day.holiday?"🌴 Канікули":day.school===false?"🏠 Вдома":day.school?"🏫 Очно":""}</div></div>`;
+ let h=`<div class="top"><div><h1>${wv?"Тиждень":DF[wd(U(sel))]}</h1><small>${wv?fd(days[0])+" – "+fd(days[4]):fd(sel)+"."+sel.slice(0,4)}</small></div><div style="display:flex;gap:6px"><div class="pill">${day.holiday?"🌴":day.school===false?"🏠":day.school?"🏫":""}</div><button class="pill" data-wv="${wv?0:1}">${wv?"День":"Тиждень"}</button></div></div>`;
  if(offline)h+=`<div class="box sm">Немає зв'язку з ботом. Показано збережені дані.</div>`;
  h+=banner();
  h+=`<div class="strip">${days.map(k=>`<button data-d="${k}" class="${k===sel?"sel ":""}${k===t?"tod ":""}${st.days[k].holiday?"hol":""}"><b>${DN[wd(U(k))]}</b><span>${+k.slice(8)}</span></button>`).join("")}</div>`;
  h+=`<div class="nav"><button data-w="-1">‹ Минулий</button><button data-w="0">Сьогодні</button><button data-w="1">Наступний ›</button></div>`;
- const isT=sel===t,live=L.filter(l=>!l.cancelled),c=isT&&live.find(l=>cur>=mins(l.start)&&cur<mins(l.end)),nx=isT&&live.find(l=>mins(l.start)>cur);
+ if(wv)return h+wkv();
+ const isT=sel===t,live=L.filter(l=>!l.cancelled),c=isT&&live.find(l=>cur>=mins(l.start)&&cur<mins(E(l))),nx=isT&&live.find(l=>mins(l.start)>cur);
  if(day.holiday){const left=Math.round((U(day.holiday.to)-U(sel))/D)+1;h+=`<div class="hero hol"><div class="k">${esc(day.holiday.title)}</div><div class="t">Уроків немає</div><div class="k">До ${fd(day.holiday.to)} включно, залишилось днів: ${left}</div></div>`}
  else if(!L.length)h+=`<div class="hero"><div class="t">Уроків немає</div><div class="k">${wd(U(sel))>4?"Вихідний":"Можна відпочити"}</div></div>`;
  else if(!isT){const a=live[0],z=live[live.length-1];h+=a?`<div class="hero"><div class="k">Уроків: ${live.length}</div><div class="t">${a.start} – ${z.end}</div><div class="k">Перший: ${esc(a.name)}</div></div>`:`<div class="hero"><div class="t">Усі уроки скасовано</div></div>`}
- else if(c){const p=(cur-mins(c.start))/(mins(c.end)-mins(c.start))*100;h+=`<div class="hero live"><div class="k">Зараз ${c.number}-й урок${c.room?", каб. "+esc(c.room):""}</div><div class="t">${esc(c.name)}</div><div class="bar"><i style="width:${p}%"></i></div><div class="m"><span>${c.start}</span><span>ще ${mins(c.end)-cur} хв</span><span>${c.end}</span></div></div>`}
+ else if(c){const p=(cur-mins(c.start))/(mins(E(c))-mins(c.start))*100;h+=`<div class="hero live"><div class="k">Зараз ${c.number}-й урок${c.room?", каб. "+esc(c.room):""}</div><div class="t">${esc(c.name)}</div><div class="bar"><i style="width:${p}%"></i></div><div class="m"><span>${c.start}</span><span>ще ${mins(E(c))-cur} хв</span><span>${E(c)}</span></div></div>`}
  else if(nx){h+=`<div class="hero"><div class="k">${cur<mins(live[0].start)?"Уроки ще не почались":"Перерва"}</div><div class="t">${esc(nx.name)}</div><div class="k">${nx.number}-й урок о ${nx.start}${nx.room?", каб. "+esc(nx.room):""}, через ${fm(mins(nx.start)-cur)}</div></div>`}
  else h+=`<div class="hero"><div class="t">Уроки закінчились</div></div>`;
- h+=L.map(l=>{const k=sel+"|"+l.number,past=isT?cur>=mins(l.end):sel<t,now_=isT&&!l.cancelled&&cur>=mins(l.start)&&cur<mins(l.end);
-  return `<button class="row ${l.cancelled?"cx ":""}${past?"past ":""}${now_?"now":""}" data-n="${l.number}" style="--c:${col(l.name)}"><div class="tm">${l.start}<span>${l.end}</span></div><div class="cl"></div><div class="bd"><b>${esc(l.name)}</b><span>${l.number}-й урок${l.room?", каб. "+esc(l.room):""}${l.remote?", дистанційно":""}${l.cancelled?' <i class="tag">скасовано</i>':""}</span></div><div class="nb">${notes[k]?"📝":""}</div></button>`}).join("");
+ h+=L.map(l=>{const k=sel+"|"+l.number,past=isT?cur>=mins(E(l)):sel<t,now_=isT&&!l.cancelled&&cur>=mins(l.start)&&cur<mins(E(l));
+  return `<button class="row ${l.cancelled?"cx ":""}${past?"past ":""}${now_?"now":""}" data-n="${l.number}" style="--c:${col(l.name)}"><div class="tm">${l.start}<span>${E(l)}</span></div><div class="cl"></div><div class="bd"><b>${esc(l.name)}</b><span>${l.number}-й урок${l.room?", каб. "+esc(l.room):""}${l.remote?", дистанційно":""}${l.early_end?", закінчився раніше":""}${l.cancelled?' <i class="tag">скасовано</i>':""}</span></div><div class="nb">${notes[k]?"📝":""}</div></button>`}).join("");
  const nh=st.holidays.filter(x=>x.to>=t).slice(0,3);
  if(nh.length)h+=`<h2>Канікули</h2>`+nh.map(x=>{const d=Math.round((U(x.from)-U(t))/D);return `<div class="box"><b>${esc(x.title)}</b><span class="sm">${fd(x.from)} – ${fd(x.to)}, ${d>0?"через "+d+" дн.":"тривають"}</span></div>`}).join("");
  const ni=Object.keys(notes).filter(k=>k.slice(0,10)>=t&&notes[k]).sort().slice(0,5);
  if(ni.length)h+=`<h2>Нагадування</h2>`+ni.map(k=>`<div class="box"><b class="sm">${fd(k.slice(0,10))}, ${k.split("|")[1]}-й урок</b>${esc(notes[k])}</div>`).join("");
  return h}
+function wkv(){const t=iso(kyiv());return Object.keys(st.days).slice(0,5).map(k=>{const d=st.days[k];return `<button class="box" data-d="${k}" data-wv="0" style="width:100%;text-align:left;${k===t?"outline:2px solid var(--ac)":""}"><div class="hl"><b>${DF[wd(U(k))]}, ${fd(k)}</b><span class="sm">${d.holiday?"🌴 "+esc(d.holiday.title):d.school===false?"🏠 вдома":d.school?"🏫 очно":""}</span></div>${d.holiday?"":d.lessons.length?d.lessons.map(l=>`<div class="sm" style="${l.cancelled?"text-decoration:line-through":""}">${l.number}. ${esc(l.name)}, ${l.start}${l.room?", каб. "+esc(l.room):""}</div>`).join(""):'<div class="sm">Уроків немає</div>'}</button>`}).join("")}
 function alr(){
  const a=st.alert,m=since(a),ago=a.last_ok?Math.floor((Date.now()-Date.parse(a.last_ok))/1e3):null;
  let h=`<div class="top"><div><h1>Тривоги</h1><small>${esc(a.region)}</small></div></div>`;
@@ -137,15 +142,18 @@ function alr(){
   return `<div class="box hl"><div><b><i class="dot ${x.level==="red"?"red":""}"></i>${d===t?"Сьогодні":d===y?"Вчора":fd(d)}, ${s.slice(11,16)} – ${e?e.slice(11,16):"триває"}</b><span class="sm">${x.level==="red"?"Червоний":x.level==="yellow"?"Жовтий":"Рівень невідомий"} рівень</span></div><div class="sm">${fm(dur)||"<1 хв"}</div></div>`}).join("");
  return h}
 function adm(){
+ const d=adminDay,ov=adminOv,S=st.settings||{};
  let h=`<div class="top"><div><h1>Керування</h1><small>Тільки для адмінів</small></div></div><h2 style="margin-top:6px">Уроки</h2><input type="date" id="ad" value="${adminDate}">`;
- const d=adminDay;
  if(!d)h+=`<div class="empty">Не вдалося завантажити день</div>`;
  else{if(d.holiday)h+=`<div class="box sm">У цей день канікули: ${esc(d.holiday.title)}. Уроки не показуються.</div>`;
-  h+=d.lessons.map(l=>`<div class="box"><div class="hl"><div><b${l.cancelled?' style="text-decoration:line-through"':""}>${l.number}. ${esc(l.name)}</b><span class="sm">${l.start}–${l.end}</span></div><div><button class="b2" data-cx="${l.number}" data-v="${l.cancelled?0:1}">${l.cancelled?"Повернути":"Скасувати"}</button> <button class="b2" data-tm="${l.number}" data-s="${l.start}" data-e="${l.end}">Час</button></div></div></div>`).join("");
-  h+=`<button class="b2" id="addl" style="margin-top:4px">+ Додатковий урок</button>`}
+  h+=d.lessons.map(l=>`<button class="box hl" data-al="${l.number}" style="width:100%;text-align:left"><div><b${l.cancelled?' style="text-decoration:line-through"':""}>${l.number}. ${esc(l.name)}</b><span class="sm">${l.start}–${E(l)}${l.extra?", додатковий":""}${l.remote?", дист.":""}${l.early_end?", раніше":""}${l.cancelled?", скасовано":""}</span></div><span class="sm">Дії ›</span></button>`).join("")||(d.holiday?"":`<div class="box sm">У цей день уроків немає</div>`);
+  h+=`<button class="b2" id="addl" style="margin-top:4px;background:var(--card)">+ Додатковий урок</button>`}
+ h+=`<h2>Активні зміни</h2>`+(!ov?`<div class="box sm">Не вдалося завантажити</div>`:ov.changes.length?ov.changes.map((c,i)=>`<div class="box hl"><div><b>${fd(c.date)}, ${c.number}. ${esc(c.name)}</b><span class="sm">${esc(c.text)}</span></div><button class="b2" data-undo="${i}">Зняти</button></div>`).join(""):`<div class="box sm">Змін на найближчі 3 тижні немає</div>`);
  h+=`<h2>Канікули</h2>`+(st.holidays.length?st.holidays.map(x=>`<div class="box hl"><div><b>${esc(x.title)}</b><span class="sm">${fd(x.from)} – ${fd(x.to)}</span></div><button class="b2 rd" data-hd="${x.id}">Видалити</button></div>`).join(""):`<div class="box sm">Канікул не додано</div>`);
  h+=`<div class="two"><div><label>Від</label><input type="date" id="hf"></div><div><label>До (включно)</label><input type="date" id="ht"></div></div><input id="hn" placeholder="Назва, наприклад: Осінні канікули"><button class="go" id="hadd">Додати канікули</button>`;
- h+=`<h2>Оголошення в чат</h2><textarea id="an" rows="3" placeholder="Текст повідомлення для класного чату"></textarea><button class="go" id="asend">Надіслати в чат</button>`;
+ h+=`<h2>Повідомлення в чат</h2><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${["Сьогодні уроки дистанційно.","Сьогодні уроки очно.","Увага: зміни в розкладі, дивіться застосунок."].map((t,i)=>`<button class="b2" style="background:var(--card)" data-tpl="${i}">${["Дистанційно","Очно","Зміни"][i]}</button>`).join("")}</div><textarea id="an" rows="3" placeholder="Текст повідомлення для класного чату"></textarea><button class="go" id="asend">Надіслати в чат</button>`;
+ h+=`<h2>Налаштування</h2><label class="box hl" style="color:var(--tx);font-size:16px;margin:0 0 8px"><span><b>Сповіщення про тривоги в чат</b><span class="sm">${S.alerts_muted?"Вимкнено адміном":"Увімкнено"}</span></span><input type="checkbox" id="mute" ${S.alerts_muted?"":"checked"} style="width:22px;height:22px;margin:0"></label>`;
+ if(ov){const g=ov.diag;h+=`<h2>Система</h2><div class="box sm">Бот працює ${fm(g.uptime_min)||"менше хвилини"}<br>Область: ${esc(g.region)}, адмінів: ${g.admins}<br>Сховище: ${g.persistent?"постійне (DATA_DIR)":"тимчасове, зникає при деплої"}<br>Файли: ${Object.keys(g.files).map(k=>k.replace(".json","")+" "+g.files[k]+" Б").join(", ")||"немає"}</div>`}
  return h}
 function render(){
  const A=$("app");
@@ -158,25 +166,36 @@ $("tabs").onclick=async e=>{const b=e.target.closest("button");if(!b)return;tab=
 const loadAdmin2=async()=>{await loadAdminDay()};
 $("app").onclick=async e=>{const b=e.target.closest("button");if(!b)return;const D_=b.dataset;
  if(D_.go){tab="al";hap();return render()}
- if(D_.d){sel=D_.d;hap();return render()}
+ if(D_.wv!==undefined)wv=D_.wv==="1";
+ if(D_.d||D_.wv!==undefined){if(D_.d)sel=D_.d;hap();return render()}
  if(D_.w!==undefined){off=D_.w==="0"?0:off+ +D_.w;sel=null;hap();await load();return render()}
  if(D_.n){const l=st.days[sel].lessons.find(x=>x.number==D_.n),k=sel+"|"+l.number;
   return sheet(`<h3 style="margin:0 0 2px;font-size:20px">${esc(l.name)}</h3><div class="sm" style="margin-bottom:12px">${DF[wd(U(sel))]}, ${fd(sel)}, ${l.number}-й урок</div><textarea id="ta" rows="4" placeholder="Що задали або що взяти з собою">${esc(notes[k]||"")}</textarea><button class="go" id="sv">Зберегти</button>${notes[k]?'<button class="go" id="dl" style="background:var(--card);color:var(--tx)">Видалити</button>':""}`),
   $("sv").onclick=()=>{const v=$("ta").value.trim();if(v)notes[k]=v;else delete notes[k];saveN();closeSheet();render()},
   $("dl")&&($("dl").onclick=()=>{delete notes[k];saveN();closeSheet();render()})}
  if(tab!=="adm")return;
- const act=async(fn,ok)=>{try{await fn();toast(ok);await load();await loadAdminDay();render()}catch(x){toast("Помилка: "+(x===403?"немає прав":"спробуйте ще раз"))}};
- if(D_.cx)return act(()=>post("/api/admin/cancel",{date:adminDate,number:+D_.cx,cancel:D_.v==="1"}),D_.v==="1"?"Урок скасовано":"Урок повернуто");
+ if(D_.al){curL=adminDay.lessons.find(x=>x.number==D_.al);const l=curL,nowT=new Date().toLocaleTimeString("en-GB",{timeZone:"Europe/Kyiv",hour:"2-digit",minute:"2-digit"}),sc='style="background:var(--card);color:var(--tx)"';
+  return sheet(`<h3 style="margin:0 0 2px;font-size:20px">${l.number}. ${esc(l.name)}</h3><div class="sm" style="margin-bottom:10px">${fd(adminDate)}, ${l.start}–${E(l)}</div><button class="go" data-a="cx">${l.cancelled?"Повернути урок":"Скасувати урок"}</button><button class="go" ${sc} data-a="tm">Змінити час</button>${l.early_end?`<button class="go" ${sc} data-a="enc">Скасувати дострокове завершення (${l.early_end})</button>`:`<div class="two" style="margin-top:8px"><input type="time" id="et" value="${nowT}" style="margin:0"><button class="go" ${sc} style="margin:0;background:var(--card);color:var(--tx)" data-a="en">Завершити о цій годині</button></div>`}${l.remote_capable?`<button class="go" ${sc} data-a="ip">${l.remote?"Буде очно":"Зробити дистанційним"}</button>`:""}${l.extra?`<button class="go" ${sc} data-a="rm" style="background:var(--card);color:var(--rd)">Видалити додатковий урок</button>`:""}`)}
+ if(D_.undo){const c=adminOv.changes[+D_.undo];return act(()=>undo(c),"Зміну знято")}
  if(D_.hd)return act(()=>post("/api/admin/holiday",{remove:D_.hd}),"Канікули видалено");
- if(D_.tm){sheet(`<h3 style="margin:0 0 12px">${D_.tm}-й урок: змінити час</h3><div class="two"><div><label>Початок</label><input type="time" id="s1" value="${D_.s}"></div><div><label>Кінець</label><input type="time" id="e1" value="${D_.e}"></div></div><button class="go" id="ok">Зберегти</button><button class="go" id="clr" style="background:var(--card);color:var(--tx)">Повернути за розкладом</button>`);
-  $("ok").onclick=()=>{closeSheet();act(()=>post("/api/admin/time",{date:adminDate,number:+D_.tm,start:$("s1").value,end:$("e1").value}),"Час змінено")};
-  $("clr").onclick=()=>{closeSheet();act(()=>post("/api/admin/time",{date:adminDate,number:+D_.tm,clear:true}),"Час повернуто")};return}
+ if(D_.tpl!==undefined){$("an").value=["Сьогодні уроки дистанційно.","Сьогодні уроки очно.","Увага: зміни в розкладі, дивіться застосунок."][+D_.tpl];return}
  if(b.id==="addl"){sheet(`<h3 style="margin:0 0 12px">Додатковий урок на ${fd(adminDate)}</h3><div class="two"><div><label>Номер</label><input type="number" id="xn" min="0" max="12" value="0"></div><div><label>Назва</label><input id="xm"></div><div><label>Початок</label><input type="time" id="xs"></div><div><label>Кінець</label><input type="time" id="xe"></div></div><button class="go" id="ok">Додати</button>`);
   $("ok").onclick=()=>{const v=[$("xn").value,$("xm").value,$("xs").value,$("xe").value];closeSheet();act(()=>post("/api/admin/lesson",{date:adminDate,number:+v[0],name:v[1],start:v[2],end:v[3]}),"Урок додано")};return}
  if(b.id==="hadd"){const f=$("hf").value,t=$("ht").value;if(!f||!t)return toast("Вкажіть обидві дати");return act(()=>post("/api/admin/holiday",{from:f,to:t,title:$("hn").value}),"Канікули додано")}
  if(b.id==="asend"){const v=$("an").value.trim();if(!v)return toast("Введіть текст");if(!confirm("Надіслати в чат класу?"))return;return act(()=>post("/api/admin/announce",{text:v}),"Надіслано")}
 };
-$("app").onchange=async e=>{if(e.target.id==="ad"&&e.target.value){adminDate=e.target.value;await loadAdminDay();render()}};
+$("panel").onclick=e=>{const b=e.target.closest("[data-a]");if(!b||!curL)return;const l=curL,n=l.number,date=adminDate,k=b.dataset.a,sc='style="background:var(--card);color:var(--tx)"';
+ if(k==="tm"){sheet(`<h3 style="margin:0 0 12px">${n}-й урок: змінити час</h3><div class="two"><div><label>Початок</label><input type="time" id="s1" value="${l.start}"></div><div><label>Кінець</label><input type="time" id="e1" value="${l.end}"></div></div><button class="go" id="ok">Зберегти</button><button class="go" ${sc} id="clr">Повернути за розкладом</button>`);
+  $("ok").onclick=()=>{const v=[$("s1").value,$("e1").value];closeSheet();act(()=>post("/api/admin/time",{date,number:n,start:v[0],end:v[1]}),"Час змінено")};
+  $("clr").onclick=()=>{closeSheet();act(()=>post("/api/admin/time",{date,number:n,clear:true}),"Час повернуто")};return}
+ const v=k==="en"?$("et").value:"";closeSheet();
+ if(k==="cx")return act(()=>post("/api/admin/cancel",{date,number:n,cancel:!l.cancelled}),l.cancelled?"Урок повернуто":"Урок скасовано");
+ if(k==="en")return act(()=>post("/api/admin/endnow",{date,number:n,time:v}),"Урок завершено раніше");
+ if(k==="enc")return act(()=>post("/api/admin/endnow",{date,number:n,clear:true}),"Завершення скасовано");
+ if(k==="ip")return act(()=>post("/api/admin/inperson",{date,number:n,value:l.remote}),l.remote?"Урок буде очно":"Позначено дистанційним");
+ if(k==="rm")return act(()=>post("/api/admin/lesson",{date,number:n,remove:true}),"Урок видалено")};
+$("app").onchange=async e=>{if(e.target.id==="ad"&&e.target.value){adminDate=e.target.value;await loadAdminDay();render()}
+ if(e.target.id==="mute")act(()=>post("/api/admin/settings",{key:"alerts_muted",value:!e.target.checked}),e.target.checked?"Сповіщення увімкнено":"Сповіщення вимкнено")};
 async function boot(){await load();if(!st.err)await loadAdmin();render()}
 boot();
 setInterval(async()=>{if($("sheet").classList.contains("on")||tab==="adm")return;await load();render()},15000);

@@ -30,6 +30,7 @@ import config
 import early_end
 import extra_lessons
 import remote_overrides
+import settings
 from alerts import AlertWatcher
 from lessons import (
     find_current_and_next,
@@ -777,6 +778,8 @@ def _level_emoji_and_label(level: str | None) -> tuple[str, str]:
 
 def _in_notify_window(now: datetime) -> bool:
     """Чи потрапляє поточний час у діапазон ALERT_NOTIFY_FROM..ALERT_NOTIFY_TO."""
+    if settings.get("alerts_muted"):
+        return False  # адмін вимкнув сповіщення в чат з міні-застосунку
     raw_from = config.ALERT_NOTIFY_FROM
     raw_to = config.ALERT_NOTIFY_TO
     if not raw_from or not raw_to or raw_from.lower() == "off" or raw_to.lower() == "off":
