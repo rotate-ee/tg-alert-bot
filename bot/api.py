@@ -113,8 +113,9 @@ def _alert_block(watcher) -> dict:
 
 def _day_block(d: date) -> dict:
     hol = holidays.get_holiday(d)
+    ended = lessons.schedule_ended(d)
     items = []
-    if d.weekday() < 5:
+    if d.weekday() < 5 and not ended:
         extra_nums = {e["number"] for e in extra_lessons.get_extra_lessons(d)}
         school = lessons.is_school_week(d)
         for l in lessons.get_lessons_for_date(d):
@@ -126,7 +127,7 @@ def _day_block(d: date) -> dict:
                 "early_end": early_end.get_early_end(d, l["number"]),
                 "extra": l["number"] in extra_nums,
             })
-    return {"school": lessons.is_school_week(d), "holiday": hol, "lessons": items, "remote_period": remote_periods.get_period(d), "renumbered": bool(renumber.get_map(d))}
+    return {"school": lessons.is_school_week(d), "holiday": hol, "lessons": items, "ended": ended, "remote_period": remote_periods.get_period(d), "renumbered": bool(renumber.get_map(d))}
 
 
 async def state(request: web.Request) -> web.Response:
@@ -255,7 +256,10 @@ async def a_inperson(request: web.Request) -> web.Response:
 async def a_settings(request: web.Request) -> web.Response:
     _need_admin(request)
     b = await request.json()
-    settings.set_value(str(b["key"]), b["value"])
+    key, value = str(b["key"]), b["value"]
+    if key == "schedule_end" and value:
+        value = _d(str(value)).isoformat()  # перевірка формату YYYY-MM-DD
+    settings.set_value(key, value)
     return web.json_response({"ok": True, "settings": settings.load()})
 
 

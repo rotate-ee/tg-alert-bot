@@ -29,6 +29,7 @@ import cancellations
 import config
 import early_end
 import extra_lessons
+import holidays
 import remote_overrides
 import settings
 from alerts import AlertWatcher
@@ -43,6 +44,7 @@ from lessons import (
     get_today_lessons,
     lesson_start_datetime,
     is_school_week,
+    schedule_ended,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -714,6 +716,8 @@ async def week_type_sunday_reminder():
         await asyncio.sleep((target - now).total_seconds())
 
         next_monday = target.date() + timedelta(days=1)
+        if schedule_ended(next_monday) or holidays.get_holiday(next_monday):
+            continue  # після випуску і на канікулах нагадування не потрібне
         school = is_school_week(next_monday)
         if school is None:
             log.info("SCHOOL_WEEK_ANCHOR_MONDAY не налаштовано - недільне нагадування пропускаю")

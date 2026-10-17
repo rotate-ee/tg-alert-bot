@@ -17,6 +17,7 @@ import holidays
 import remote_overrides
 import remote_periods
 import renumber
+import settings
 import week_shifts
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
@@ -176,6 +177,12 @@ def _build_day_lessons(
     return lessons
 
 
+def schedule_ended(d: date) -> bool:
+    """Розклад більше не діє (після випуску): дата пізніша за settings.schedule_end."""
+    end = settings.get("schedule_end")
+    return bool(end) and d.isoformat() > end
+
+
 def zero_bell(schedule: dict) -> dict | None:
     """Типовий час 0-го уроку: 45 хв, що закінчується за 5 хв до початку 1-го уроку."""
     first = schedule["bells"].get(1)
@@ -194,8 +201,8 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
     if now is None:
         now = datetime.now(KYIV_TZ)
     today = now.date()
-    if holidays.get_holiday(today):
-        return []  # канікули - уроків немає
+    if holidays.get_holiday(today) or schedule_ended(today):
+        return []  # канікули або розклад завершено - уроків немає
     schedule = load_schedule()
     group = week_group(now)
     day_entries = schedule["days"].get(now.weekday(), [])
