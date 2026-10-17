@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import config
+import duty_overrides
 import holidays
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
@@ -30,7 +31,12 @@ def upcoming(limit: int = 5, today: date | None = None) -> list[dict]:
         if current.weekday() < 5 and holidays.get_holiday(current) is None:
             first = slot * 2 % len(students)
             pair = [students[first], students[(first + 1) % len(students)]]
-            result.append({"date": current.isoformat(), "students": pair})
+            override = duty_overrides.get_override(current)
+            result.append({
+                "date": current.isoformat(),
+                "students": override or pair,
+                "overridden": override is not None,
+            })
             slot += 1
         current += timedelta(days=1)
     return result

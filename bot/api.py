@@ -20,6 +20,7 @@ import bell_overrides
 import cancellations
 import config
 import duties
+import duty_overrides
 import early_end
 import extra_lessons
 import holidays
@@ -157,6 +158,7 @@ async def duty_schedule(request: web.Request) -> web.Response:
     return web.json_response({
         "configured": bool(config.DUTY_STUDENTS),
         "start_date": config.DUTY_START_DATE,
+        "students_list": list(config.DUTY_STUDENTS),
         "days": duties.upcoming(),
     })
 
@@ -166,6 +168,23 @@ def _need_admin(request: web.Request) -> dict:
     if user is None:
         raise web.HTTPForbidden(text=json.dumps({"error": "forbidden"}), content_type="application/json")
     return user
+
+
+async def a_duty(request: web.Request) -> web.Response:
+    _need_admin(request)
+    body = await request.json()
+    day = _d(body["date"])
+    if body.get("reset"):
+        duty_overrides.clear_override(day)
+        return web.json_response({"ok": True})
+
+    pair = body.get("students")
+    if (not isinstance(pair, list) or len(pair) != 2
+            or any(not isinstance(name, str) or name not in config.DUTY_STUDENTS for name in pair)
+            or pair[0] == pair[1]):
+        raise ValueError("students")
+    duty_overrides.set_override(day, pair)
+    return web.json_response({"ok": True})
 
 
 async def a_cancel(request: web.Request) -> web.Response:
@@ -350,6 +369,7 @@ async def start(bot, watcher) -> web.AppRunner:
     app.router.add_get("/api/state", state)
     app.router.add_get("/api/me", me)
     app.router.add_get("/api/duties", duty_schedule)
+    app.router.add_post("/api/admin/duty", a_duty)
     app.router.add_post("/api/admin/cancel", a_cancel)
     app.router.add_post("/api/admin/time", a_time)
     app.router.add_post("/api/admin/lesson", a_lesson)
