@@ -26,6 +26,7 @@ import extra_lessons
 import holidays
 import lessons
 import remote_overrides
+import remote_periods
 import renumber
 import settings
 
@@ -124,7 +125,7 @@ def _day_block(d: date) -> dict:
                 "early_end": early_end.get_early_end(d, l["number"]),
                 "extra": l["number"] in extra_nums,
             })
-    return {"school": lessons.is_school_week(d), "holiday": hol, "lessons": items, "renumbered": bool(renumber.get_map(d))}
+    return {"school": lessons.is_school_week(d), "holiday": hol, "lessons": items, "remote_period": remote_periods.get_period(d), "renumbered": bool(renumber.get_map(d))}
 
 
 async def state(request: web.Request) -> web.Response:
@@ -143,6 +144,7 @@ async def state(request: web.Request) -> web.Response:
         "alert": _alert_block(watcher),
         "days": {(start + timedelta(days=i)).isoformat(): _day_block(start + timedelta(days=i)) for i in range(n)},
         "holidays": holidays.list_all(),
+        "remote_periods": remote_periods.list_all(),
         "settings": settings.load(),
     })
 
@@ -353,6 +355,19 @@ async def a_holiday(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "holidays": holidays.list_all()})
 
 
+async def a_remote_period(request: web.Request) -> web.Response:
+    _need_admin(request)
+    b = await request.json()
+    if b.get("remove"):
+        remote_periods.remove(str(b["remove"]))
+    else:
+        d1, d2 = _d(b["from"]), _d(b["to"])
+        if d2 < d1:
+            raise ValueError("range")
+        remote_periods.add(d1, d2, str(b.get("title", ""))[:60])
+    return web.json_response({"ok": True, "remote_periods": remote_periods.list_all()})
+
+
 async def a_announce(request: web.Request) -> web.Response:
     _need_admin(request)
     b = await request.json()
@@ -374,6 +389,7 @@ async def start(bot, watcher) -> web.AppRunner:
     app.router.add_post("/api/admin/time", a_time)
     app.router.add_post("/api/admin/lesson", a_lesson)
     app.router.add_post("/api/admin/holiday", a_holiday)
+    app.router.add_post("/api/admin/remote_period", a_remote_period)
     app.router.add_post("/api/admin/endnow", a_endnow)
     app.router.add_post("/api/admin/renumber", a_renumber)
     app.router.add_post("/api/admin/inperson", a_inperson)

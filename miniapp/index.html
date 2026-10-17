@@ -100,6 +100,7 @@ function sch(){
  const days=Object.keys(st.days).slice(0,5);
  let h=`<div class="top"><div><h1>${wv?"Тиждень":DF[wd(U(sel))]}</h1><small>${wv?fd(days[0])+" – "+fd(days[4]):fd(sel)+"."+sel.slice(0,4)}</small></div><div style="display:flex;gap:6px"><div class="pill">${day.holiday?"🌴":day.school===false?"🏠":day.school?"🏫":""}</div><button class="pill" data-wv="${wv?0:1}">${wv?"День":"Тиждень"}</button></div></div>`;
  if(offline)h+=`<div class="box sm">Немає зв'язку з ботом. Показано збережені дані.</div>`;
+ if(day.remote_period&&!day.holiday)h+=`<div class="box sm">🏠 ${esc(day.remote_period.title)}: усі уроки дистанційно до ${fd(day.remote_period.to)} включно</div>`;
  if(admin&&st.settings&&st.settings.maintenance)h+=`<div class="box sm" style="background:var(--yl);color:#fff">Увімкнено режим технічних робіт: користувачі бачать заглушку, а ви бачите застосунок як адмін.</div>`;
  h+=banner();
  h+=`<div class="strip">${days.map(k=>`<button data-d="${k}" class="${k===sel?"sel ":""}${k===t?"tod ":""}${st.days[k].holiday?"hol":""}"><b>${DN[wd(U(k))]}</b><span>${+k.slice(8)}</span></button>`).join("")}</div>`;
@@ -117,6 +118,8 @@ function sch(){
   return `<button class="row ${l.cancelled?"cx ":""}${past?"past ":""}${now_?"now":""}" data-n="${l.number}" style="--c:${col(l.name)}"><div class="tm">${l.start}<span>${E(l)}</span></div><div class="cl"></div><div class="bd"><b>${esc(l.name)}</b><span>${l.number}-й урок${l.room?", каб. "+esc(l.room):""}${l.remote?", дистанційно":""}${l.early_end?", закінчився раніше":""}${l.cancelled?' <i class="tag">скасовано</i>':""}</span></div><div class="nb">${taskBadge(k)}</div></button>`}).join("");
  const nh=st.holidays.filter(x=>x.to>=t).slice(0,3);
  if(nh.length)h+=`<h2>Канікули</h2>`+nh.map(x=>{const d=Math.round((U(x.from)-U(t))/D);return `<div class="box"><b>${esc(x.title)}</b><span class="sm">${fd(x.from)} – ${fd(x.to)}, ${d>0?"через "+d+" дн.":"тривають"}</span></div>`}).join("");
+ const nr=(st.remote_periods||[]).filter(x=>x.to>=t).slice(0,3);
+ if(nr.length)h+=`<h2>Дистанційне навчання</h2>`+nr.map(x=>`<div class="box"><b>${esc(x.title)}</b><span class="sm">${fd(x.from)} – ${fd(x.to)}</span></div>`).join("");
  const ni=Object.keys(notes).filter(k=>k.slice(0,10)>=t&&notes[k]).sort().slice(0,5);
  if(ni.length)h+=`<h2>Нагадування</h2>`+ni.map(k=>`<div class="box"><b class="sm">${fd(k.slice(0,10))}, ${k.split("|")[1]}-й урок</b>${esc(notes[k])}</div>`).join("");
  return h}
@@ -159,8 +162,10 @@ function adm(){
   if(d.renumbered)h+=`<button class="b2" id="rnreset" style="margin:4px 6px 0 0;background:var(--card)">Скинути нумерацію дня</button>`;
   h+=`<button class="b2" id="addl" style="margin-top:4px;background:var(--card)">+ Додатковий урок</button>`}
  h+=`<h2>Активні зміни</h2>`+(!ov?`<div class="box sm">Не вдалося завантажити</div>`:ov.changes.length?ov.changes.map((c,i)=>`<div class="box hl"><div><b>${fd(c.date)}, ${c.number?c.number+". ":""}${esc(c.name)}</b><span class="sm">${esc(c.text)}</span></div><button class="b2" data-undo="${i}">Зняти</button></div>`).join(""):`<div class="box sm">Змін на найближчі 3 тижні немає</div>`);
- h+=`<h2>Канікули</h2>`+(st.holidays.length?st.holidays.map(x=>`<div class="box hl"><div><b>${esc(x.title)}</b><span class="sm">${fd(x.from)} – ${fd(x.to)}</span></div><button class="b2 rd" data-hd="${x.id}">Видалити</button></div>`).join(""):`<div class="box sm">Канікул не додано</div>`);
+ h+=`<h2>Канікули</h2>`+(st.holidays.length?st.holidays.map(x=>`<div class="box hl"><div><b>${esc(x.title)}</b><span class="sm">${fd(x.from)} – ${fd(x.to)}</span></div><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="b2" data-ra="${x.to}">Дист. тиждень після</button><button class="b2 rd" data-hd="${x.id}">Видалити</button></div></div>`).join(""):`<div class="box sm">Канікул не додано</div>`);
  h+=`<div class="two"><div><label>Від</label><input type="date" id="hf"></div><div><label>До (включно)</label><input type="date" id="ht"></div></div><input id="hn" placeholder="Назва, наприклад: Осінні канікули"><button class="go" id="hadd">Додати канікули</button>`;
+ h+=`<h2>Дистанційне навчання</h2>`+((st.remote_periods||[]).length?st.remote_periods.map(x=>`<div class="box hl"><div><b>${esc(x.title)}</b><span class="sm">${fd(x.from)} – ${fd(x.to)}</span></div><button class="b2 rd" data-rd="${x.id}">Видалити</button></div>`).join(""):`<div class="box sm">Дистанційних періодів не додано</div>`);
+ h+=`<div class="two"><div><label>Від</label><input type="date" id="rpf"></div><div><label>До (включно)</label><input type="date" id="rpt"></div></div><input id="rpn" placeholder="Назва, наприклад: Дистанційний тиждень"><button class="go" id="rpadd">Додати дистанційний період</button>`;
  h+=`<h2>Повідомлення в чат</h2><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${["Сьогодні уроки дистанційно.","Сьогодні уроки очно.","Увага: зміни в розкладі, дивіться застосунок."].map((t,i)=>`<button class="b2" style="background:var(--card)" data-tpl="${i}">${["Дистанційно","Очно","Зміни"][i]}</button>`).join("")}</div><textarea id="an" rows="3" placeholder="Текст повідомлення для класного чату"></textarea><button class="go" id="asend">Надіслати в чат</button>`;
  h+=`<h2>Налаштування</h2><label class="box hl" style="color:var(--tx);font-size:16px;margin:0 0 8px"><span><b>Сповіщення про тривоги в чат</b><span class="sm">${S.alerts_muted?"Вимкнено адміном":"Увімкнено"}</span></span><input type="checkbox" id="mute" ${S.alerts_muted?"":"checked"} style="width:22px;height:22px;margin:0"></label>`;
  if(ov){const g=ov.diag;h+=`<h2>Система</h2><div class="box sm">Бот працює ${fm(g.uptime_min)||"менше хвилини"}<br>Область: ${esc(g.region)}, адмінів: ${g.admins}<br>Сховище: ${g.persistent?"постійне (DATA_DIR)":"тимчасове, зникає при деплої"}<br>Файли: ${Object.keys(g.files).map(k=>k.replace(".json","")+" "+g.files[k]+" Б").join(", ")||"немає"}</div>`}
@@ -207,6 +212,9 @@ $("app").onclick=async e=>{const b=e.target.closest("button");if(!b)return;const
   $("ok").onclick=()=>{const v=[$("xn").value,$("xm").value,$("xs").value,$("xe").value];closeSheet();act(()=>post("/api/admin/lesson",{date:adminDate,number:+v[0],name:v[1],start:v[2],end:v[3]}),"Урок додано")};return}
  if(b.id==="rnreset")return act(()=>post("/api/admin/renumber",{date:adminDate,reset:true}),"Нумерацію скинуто");
  if(b.id==="msave")return act(()=>post("/api/admin/settings",{key:"maintenance_message",value:$("mmsg").value}),"Текст збережено");
+ if(D_.rd)return act(()=>post("/api/admin/remote_period",{remove:D_.rd}),"Період видалено");
+ if(D_.ra){const e=U(D_.ra),k=(7-wd(e))%7||7,s0=new Date(e.getTime()+k*D),e0=new Date(s0.getTime()+6*D);return act(()=>post("/api/admin/remote_period",{from:iso(s0),to:iso(e0),title:"Дистанційний тиждень"}),"Додано: "+fd(iso(s0))+" – "+fd(iso(e0)))}
+ if(b.id==="rpadd"){const f=$("rpf").value,t=$("rpt").value;if(!f||!t)return toast("Вкажіть обидві дати");return act(()=>post("/api/admin/remote_period",{from:f,to:t,title:$("rpn").value}),"Період додано")}
  if(b.id==="hadd"){const f=$("hf").value,t=$("ht").value;if(!f||!t)return toast("Вкажіть обидві дати");return act(()=>post("/api/admin/holiday",{from:f,to:t,title:$("hn").value}),"Канікули додано")}
  if(b.id==="asend"){const v=$("an").value.trim();if(!v)return toast("Введіть текст");if(!confirm("Надіслати в чат класу?"))return;return act(()=>post("/api/admin/announce",{text:v}),"Надіслано")}
 };

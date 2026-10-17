@@ -15,6 +15,7 @@ import early_end
 import extra_lessons
 import holidays
 import remote_overrides
+import remote_periods
 import renumber
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
@@ -115,6 +116,8 @@ def is_school_week(d: date) -> bool | None:
     Рахується від опорного понеділка: парна різниця тижнів - той самий
     тип, що й опорний (школа), непарна - протилежний (вдома).
     """
+    if remote_periods.get_period(d):
+        return False  # примусово дистанційний період (напр., тиждень після канікул)
     anchor = _school_week_anchor_monday()
     if anchor is None:
         return None
