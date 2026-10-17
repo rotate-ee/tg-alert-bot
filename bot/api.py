@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 from aiohttp import web
 
 import alert_log
+import activity
 import bell_overrides
 import cancellations
 import config
@@ -166,6 +167,23 @@ async def duty_schedule(request: web.Request) -> web.Response:
         "students_list": list(config.DUTY_STUDENTS),
         "days": duties.upcoming(),
     })
+
+
+async def a_presence(request: web.Request) -> web.Response:
+    user = verify_init_data(request.headers.get("X-Init-Data", ""))
+    if user is None:
+        raise web.HTTPForbidden(text=json.dumps({"error": "forbidden"}), content_type="application/json")
+    body = await request.json()
+    page = body.get("page")
+    if page not in {"sch", "dut", "al", "adm"}:
+        raise ValueError("page")
+    activity.record(user, page)
+    return web.json_response({"ok": True})
+
+
+async def a_activity_stats(request: web.Request) -> web.Response:
+    _need_admin(request)
+    return web.json_response(activity.overview())
 
 
 def _need_admin(request: web.Request) -> dict:
@@ -400,6 +418,8 @@ async def start(bot, watcher) -> web.AppRunner:
     app.router.add_get("/api/state", state)
     app.router.add_get("/api/me", me)
     app.router.add_get("/api/duties", duty_schedule)
+    app.router.add_post("/api/activity", a_presence)
+    app.router.add_get("/api/admin/activity", a_activity_stats)
     app.router.add_post("/api/admin/duty", a_duty)
     app.router.add_post("/api/admin/cancel", a_cancel)
     app.router.add_post("/api/admin/time", a_time)

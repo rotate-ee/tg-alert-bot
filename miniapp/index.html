@@ -75,7 +75,7 @@ let notes={};try{notes=JSON.parse(localStorage.getItem("hw")||"{}")}catch(e){}
 const saveN=()=>{try{localStorage.setItem("hw",JSON.stringify(notes))}catch(e){}};
 try{localStorage.removeItem("homework_tasks_v1")}catch(e){}
 const taskBadge=k=>notes[k]?"📝":"";
-let dutyData=null,dutyError="";
+let dutyData=null,dutyError="",adminActivity=null;
 const hap=()=>{try{tg&&tg.HapticFeedback.selectionChanged()}catch(e){}};
 const toast=t=>{const e=$("toast");e.textContent=t;e.classList.add("on");setTimeout(()=>e.classList.remove("on"),1800)};
 const sheet=h=>{$("panel").innerHTML=h;$("sheet").classList.add("on")},closeSheet=()=>$("sheet").classList.remove("on");
@@ -93,6 +93,8 @@ async function load(){
  if(st.days&&!st.days[sel])sel=st.base;
 }
 async function loadAdmin(){try{admin=(await get("/api/me")).admin}catch(e){admin=false}}
+async function loadActivity(){try{adminActivity=await get("/api/admin/activity")}catch(e){adminActivity=null}}
+async function pingActivity(){if(!tg||!tg.initData)return;try{await post("/api/activity",{page:admin&&tab==="adm"?"adm":tab})}catch(e){}}
 async function loadAdminDay(){adminDate=adminDate||iso(kyiv());try{adminDay=(await get(`/api/state?from=${adminDate}&days=1`)).days[adminDate]}catch(e){adminDay=null}try{adminOv=await get("/api/admin/overview")}catch(e){adminOv=null}}
 const act=async(fn,ok)=>{try{await fn();toast(ok);await load();await loadAdminDay();render()}catch(x){toast("Помилка: "+(x===403?"немає прав":"спробуйте ще раз"))}};
 const undo=c=>c.kind==="cancel"?post("/api/admin/cancel",{date:c.date,number:c.number,cancel:false}):c.kind==="time"?post("/api/admin/time",{date:c.date,number:c.number,clear:true}):c.kind==="early"?post("/api/admin/endnow",{date:c.date,number:c.number,clear:true}):c.kind==="inperson"?post("/api/admin/inperson",{date:c.date,number:c.number,value:false}):c.kind==="renumber"?post("/api/admin/renumber",{date:c.date,reset:true}):post("/api/admin/lesson",{date:c.date,number:c.number,remove:true});
@@ -155,9 +157,20 @@ function alr(){
  h+=a.history.map(x=>{const s=x.start,d=s.slice(0,10),e=x.end,dur=Math.max(0,Math.round(((e?Date.parse(e):Date.now())-Date.parse(s))/6e4));
   return `<div class="box hl"><div><b><i class="dot ${x.level==="red"?"red":""}"></i>${d===t?"Сьогодні":d===y?"Вчора":fd(d)}, ${s.slice(11,16)} – ${e?e.slice(11,16):"триває"}</b><span class="sm">${x.level==="red"?"Червоний":x.level==="yellow"?"Жовтий":"Рівень невідомий"} рівень</span></div><div class="sm">${fm(dur)||"<1 хв"}</div></div>`}).join("");
  return h}
+function activityBlock(){
+ const pageNames={sch:"Розклад",dut:"Чергові",al:"Тривоги",adm:"Керування"};
+ if(!adminActivity)return `<section id="activity-section"><h2>Активність користувачів</h2><div class="empty">Не вдалося завантажити статистику</div></section>`;
+ const s=adminActivity.stats,a=adminActivity.active||[];
+ let h=`<section id="activity-section"><h2>Активність користувачів</h2><div class="st"><div class="box"><span class="sm">Зараз онлайн</span><b>${s.active_now}</b></div><div class="box"><span class="sm">Унікальні сьогодні</span><b>${s.today_unique}</b></div><div class="box"><span class="sm">Унікальні за 7 днів</span><b>${s.week_unique}</b></div><div class="box"><span class="sm">Унікальні за 30 днів</span><b>${s.month_unique}</b></div><div class="box"><span class="sm">Сесії сьогодні</span><b>${s.today_sessions}</b></div><div class="box"><span class="sm">Перегляди сьогодні</span><b>${s.today_page_views}</b></div></div>`;
+ h+=`<div class="box"><div class="hl" style="margin-bottom:8px"><b>Зараз у застосунку</b><span class="sm">оновлення кожні 15 с</span></div>`;
+ h+=a.length?a.map(x=>`<div class="hl" style="padding:9px 0;border-top:1px solid var(--line)"><div><b>${esc(x.name)}${x.username?` <span class="sm" style="display:inline;font-weight:500">@${esc(x.username)}</span>`:""}</b><span class="sm">${pageNames[x.page]||"Застосунок"}</span></div><span class="sm">${x.seconds_ago<60?"щойно":`${Math.floor(x.seconds_ago/60)} хв тому`}</span></div>`).join(""):`<div class="sm">Зараз нікого немає</div>`;
+ h+=`</div><div class="box"><b style="margin-bottom:8px">Відвідування розділів сьогодні</b>`+Object.entries(pageNames).map(([k,n])=>`<div class="hl" style="padding:5px 0"><span class="sm">${n}</span><span>${s.today_views?.[k]||0}</span></div>`).join("")+`<div class="sm" style="margin-top:8px">Статистика зберігається до 30 днів</div></div></section>`;
+ return h
+}
 function adm(){
  const d=adminDay,ov=adminOv,S=st.settings||{};
  let h=`<div class="top"><div><h1>Керування</h1><small>Тільки для адмінів</small></div></div>`;
+ h+=activityBlock();
  h+=`<label class="box hl" style="color:${S.maintenance?"#fff":"var(--tx)"};font-size:16px;margin:0 0 8px;${S.maintenance?"background:var(--yl)":""}"><span><b>Технічні роботи</b><span class="sm" style="color:inherit;opacity:.85">${S.maintenance?"Застосунок закрито для користувачів":"Застосунок відкритий"}</span></span><input type="checkbox" id="mnt" ${S.maintenance?"checked":""} style="width:22px;height:22px;margin:0"></label><textarea id="mmsg" rows="2" placeholder="Повідомлення для користувачів (необов\'язково)">${esc(S.maintenance_message||"")}</textarea><button class="b2" id="msave" style="background:var(--card);margin-bottom:6px">Зберегти текст</button>`;
  h+=`<h2 style="margin-top:6px">Уроки</h2><input type="date" id="ad" value="${adminDate}">`;
  if(!d)h+=`<div class="empty">Не вдалося завантажити день</div>`;
@@ -187,8 +200,8 @@ function render(){
  const a=st.alert,T=[["sch","Розклад"],["dut","Чергові"],["al",a.active?"🚨 Тривоги":"Тривоги"]];if(admin)T.push(["adm","Керування"]);
  $("tabs").innerHTML=T.map(([k,n])=>`<button data-t="${k}" class="${k===tab?"on":""}">${n}</button>`).join("");
 }
-$("tabs").onclick=async e=>{const b=e.target.closest("button");if(!b)return;tab=b.dataset.t;hap();if(tab==="adm")await loadAdmin2();if(tab==="dut")await loadDutySchedule();render();scrollTo(0,0)};
-const loadAdmin2=async()=>{await loadAdminDay()};
+$("tabs").onclick=async e=>{const b=e.target.closest("button");if(!b)return;tab=b.dataset.t;hap();await pingActivity();if(tab==="adm")await loadAdmin2();if(tab==="dut")await loadDutySchedule();render();scrollTo(0,0)};
+const loadAdmin2=async()=>{await loadAdminDay();await loadActivity()};
 $("app").onclick=async e=>{const b=e.target.closest("button");if(!b)return;const D_=b.dataset;
  if(D_.go){tab="al";hap();return render()}
  if(D_.wv!==undefined)wv=D_.wv==="1";
@@ -243,9 +256,10 @@ $("panel").onclick=e=>{const b=e.target.closest("[data-a]");if(!b||!curL)return;
 $("app").onchange=async e=>{if(e.target.id==="ad"&&e.target.value){adminDate=e.target.value;await loadAdminDay();render()}
  if(e.target.id==="mnt")act(()=>post("/api/admin/settings",{key:"maintenance",value:e.target.checked}),e.target.checked?"Технічні роботи увімкнено":"Застосунок знову відкрито");
  if(e.target.id==="mute")act(()=>post("/api/admin/settings",{key:"alerts_muted",value:!e.target.checked}),e.target.checked?"Сповіщення увімкнено":"Сповіщення вимкнено")};
-async function boot(){await load();if(!st.err)await loadAdmin();render()}
+async function boot(){await load();if(!st.err)await loadAdmin();await pingActivity();render()}
 boot();
 setInterval(async()=>{if($("sheet").classList.contains("on")||tab==="adm")return;await load();if(tab==="dut")await loadDutySchedule();render()},15000);
+setInterval(async()=>{await pingActivity();if(tab!=="adm"||$("sheet").classList.contains("on"))return;await loadActivity();const section=$("activity-section");if(section){const holder=document.createElement("div");holder.innerHTML=activityBlock();const updated=holder.querySelector("#activity-section");if(updated)section.replaceWith(updated)}},15000);
 </script>
 </body>
 </html>
