@@ -19,6 +19,7 @@ import alert_log
 import bell_overrides
 import cancellations
 import config
+import duties
 import early_end
 import extra_lessons
 import holidays
@@ -147,6 +148,17 @@ async def state(request: web.Request) -> web.Response:
 
 async def me(request: web.Request) -> web.Response:
     return web.json_response({"admin": _admin(request) is not None})
+
+
+async def duty_schedule(request: web.Request) -> web.Response:
+    # Імена класу не віддаємо публічному API: потрібен підписаний запуск у Telegram.
+    if verify_init_data(request.headers.get("X-Init-Data", "")) is None:
+        raise web.HTTPForbidden(text=json.dumps({"error": "forbidden"}), content_type="application/json")
+    return web.json_response({
+        "configured": bool(config.DUTY_STUDENTS),
+        "start_date": config.DUTY_START_DATE,
+        "days": duties.upcoming(),
+    })
 
 
 def _need_admin(request: web.Request) -> dict:
@@ -337,6 +349,7 @@ async def start(bot, watcher) -> web.AppRunner:
     app["bot"], app["watcher"] = bot, watcher
     app.router.add_get("/api/state", state)
     app.router.add_get("/api/me", me)
+    app.router.add_get("/api/duties", duty_schedule)
     app.router.add_post("/api/admin/cancel", a_cancel)
     app.router.add_post("/api/admin/time", a_time)
     app.router.add_post("/api/admin/lesson", a_lesson)

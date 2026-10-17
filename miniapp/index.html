@@ -72,6 +72,7 @@ let notes={};try{notes=JSON.parse(localStorage.getItem("hw")||"{}")}catch(e){}
 const saveN=()=>{try{localStorage.setItem("hw",JSON.stringify(notes))}catch(e){}};
 try{localStorage.removeItem("homework_tasks_v1")}catch(e){}
 const taskBadge=k=>notes[k]?"📝":"";
+let dutyData=null,dutyError="";
 const hap=()=>{try{tg&&tg.HapticFeedback.selectionChanged()}catch(e){}};
 const toast=t=>{const e=$("toast");e.textContent=t;e.classList.add("on");setTimeout(()=>e.classList.remove("on"),1800)};
 const sheet=h=>{$("panel").innerHTML=h;$("sheet").classList.add("on")},closeSheet=()=>$("sheet").classList.remove("on");
@@ -120,6 +121,18 @@ function sch(){
  if(ni.length)h+=`<h2>Нагадування</h2>`+ni.map(k=>`<div class="box"><b class="sm">${fd(k.slice(0,10))}, ${k.split("|")[1]}-й урок</b>${esc(notes[k])}</div>`).join("");
  return h}
 function wkv(){const t=iso(kyiv());return Object.keys(st.days).slice(0,5).map(k=>{const d=st.days[k];return `<button class="box" data-d="${k}" data-wv="0" style="width:100%;text-align:left;${k===t?"outline:2px solid var(--ac)":""}"><div class="hl"><b>${DF[wd(U(k))]}, ${fd(k)}</b><span class="sm">${d.holiday?"🌴 "+esc(d.holiday.title):d.school===false?"🏠 вдома":d.school?"🏫 очно":""}</span></div>${d.holiday?"":d.lessons.length?d.lessons.map(l=>`<div class="sm" style="${l.cancelled?"text-decoration:line-through":""}">${l.number}. ${esc(l.name)}, ${l.start}${l.room?", каб. "+esc(l.room):""}</div>`).join(""):'<div class="sm">Уроків немає</div>'}</button>`}).join("")}
+async function loadDutySchedule(){try{dutyData=await get("/api/duties");dutyError=""}catch(e){dutyData=null;dutyError=e===403?"Відкрийте застосунок у Telegram, щоб переглянути чергування.":"Не вдалося завантажити графік чергувань."}}
+function dutyPage(){
+ let h=`<div class="top"><div><h1>Чергові</h1><small>Пари за порядком списку</small></div></div>`;
+ if(dutyError)return h+`<div class="empty">${esc(dutyError)}</div><button class="go" onclick="loadDutySchedule().then(render)">Спробувати знову</button>`;
+ if(!dutyData)return h+`<div class="empty">Завантажую графік…</div>`;
+ if(!dutyData.configured)return h+`<div class="box">Список учнів ще не налаштовано в Railway.</div>`;
+ const today=iso(kyiv()),days=dutyData.days||[],todayDuty=days.find(x=>x.date===today),next=days[0];
+ if(todayDuty)h+=`<div class="hero live"><div class="k">Сьогодні чергують</div><div class="t">${todayDuty.students.map(esc).join(" та ")}</div><div class="k">${DF[wd(U(today))]}, ${fd(today)}</div></div>`;
+ else if(next)h+=`<div class="hero"><div class="k">Найближче чергування</div><div class="t">${next.students.map(esc).join(" та ")}</div><div class="k">${DF[wd(U(next.date))]}, ${fd(next.date)}</div></div>`;
+ h+=`<h2>Найближчі чергування</h2>`+days.map((x,i)=>`<div class="box hl"${x.date===today?' style="outline:2px solid var(--ac)"':""}><div><b>${DF[wd(U(x.date))]}, ${fd(x.date)}${x.date===today?" · сьогодні":""}</b><span class="sm">${x.students.map(esc).join(" та ")}</span></div><span class="sm">${i+1}</span></div>`).join("");
+ return h
+}
 function airMap(){return `<section class="map-card"><h2>Мапа повітряних тривог</h2><iframe id="alert-map-frame" src="https://alerts.in.ua/?embed" title="Мапа повітряних тривог" loading="lazy"></iframe></section>`}
 function alr(){
  const a=st.alert,m=since(a),ago=a.last_ok?Math.floor((Date.now()-Date.parse(a.last_ok))/1e3):null;
@@ -157,12 +170,12 @@ function render(){
  if(st&&st.maintenance){const oldMap=A.querySelector("#alert-map-frame");A.innerHTML=`<div class="top"><h1>Розклад</h1></div><div class="al yl"><div class="k">Технічні роботи</div><div class="t">Скоро повернемось</div><div class="k">${esc(st.maintenance.message||"Застосунок тимчасово недоступний. Розклад можна дізнатися в чаті командою /today.")}</div></div>${airMap()}<button class="go" onclick="boot()">Перевірити знову</button>`;const newMap=A.querySelector("#alert-map-frame");if(oldMap&&newMap)newMap.replaceWith(oldMap);$("tabs").innerHTML="";return}
  if(st&&st.err){A.innerHTML=`<div class="top"><h1>Розклад</h1></div><div class="empty">Не вдалося зв'язатися з ботом.<br><br>${API?"Перевірте, що бот працює і має публічну адресу (Railway: Settings, Networking, Generate Domain).":"Відкрийте застосунок командою /app у боті: адреса бота передається автоматично."}</div><button class="go" onclick="boot()">Спробувати знову</button>`;$("tabs").innerHTML="";return}
  const oldMap=A.querySelector("#alert-map-frame");
- A.innerHTML=tab==="sch"?sch():tab==="al"?alr():adm();
+ A.innerHTML=tab==="sch"?sch():tab==="al"?alr():tab==="dut"?dutyPage():adm();
  const newMap=A.querySelector("#alert-map-frame");if(oldMap&&newMap)newMap.replaceWith(oldMap);
- const a=st.alert,T=[["sch","Розклад"],["al",a.active?"🚨 Тривоги":"Тривоги"]];if(admin)T.push(["adm","Керування"]);
+ const a=st.alert,T=[["sch","Розклад"],["dut","Чергові"],["al",a.active?"🚨 Тривоги":"Тривоги"]];if(admin)T.push(["adm","Керування"]);
  $("tabs").innerHTML=T.map(([k,n])=>`<button data-t="${k}" class="${k===tab?"on":""}">${n}</button>`).join("");
 }
-$("tabs").onclick=async e=>{const b=e.target.closest("button");if(!b)return;tab=b.dataset.t;hap();if(tab==="adm")await loadAdmin2();render();scrollTo(0,0)};
+$("tabs").onclick=async e=>{const b=e.target.closest("button");if(!b)return;tab=b.dataset.t;hap();if(tab==="adm")await loadAdmin2();if(tab==="dut")await loadDutySchedule();render();scrollTo(0,0)};
 const loadAdmin2=async()=>{await loadAdminDay()};
 $("app").onclick=async e=>{const b=e.target.closest("button");if(!b)return;const D_=b.dataset;
  if(D_.go){tab="al";hap();return render()}
@@ -204,7 +217,7 @@ $("app").onchange=async e=>{if(e.target.id==="ad"&&e.target.value){adminDate=e.t
  if(e.target.id==="mute")act(()=>post("/api/admin/settings",{key:"alerts_muted",value:!e.target.checked}),e.target.checked?"Сповіщення увімкнено":"Сповіщення вимкнено")};
 async function boot(){await load();if(!st.err)await loadAdmin();render()}
 boot();
-setInterval(async()=>{if($("sheet").classList.contains("on")||tab==="adm")return;await load();render()},15000);
+setInterval(async()=>{if($("sheet").classList.contains("on")||tab==="adm")return;await load();if(tab==="dut")await loadDutySchedule();render()},15000);
 </script>
 </body>
 </html>

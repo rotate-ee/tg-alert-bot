@@ -1,4 +1,5 @@
 import os
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -73,6 +74,16 @@ REMOTE_CONFIRM_TIME = os.getenv("REMOTE_CONFIRM_TIME", "12:00").strip()
 # нагадування в чат. "off" або "0" - вимкнути нагадування.
 _reminder_raw = os.getenv("LESSON_REMINDER_MINUTES", "5").strip()
 LESSON_REMINDER_MINUTES = None if _reminder_raw.lower() in ("off", "0", "") else int(_reminder_raw)
+
+# Перелік чергових задається лише у змінних середовища хостингу, не в Git.
+try:
+    _duty_students = json.loads(os.getenv("DUTY_STUDENTS", "[]"))
+except json.JSONDecodeError as e:
+    raise RuntimeError("DUTY_STUDENTS має бути JSON-масивом імен") from e
+if not isinstance(_duty_students, list) or any(not isinstance(x, str) for x in _duty_students):
+    raise RuntimeError("DUTY_STUDENTS має бути JSON-масивом рядків")
+DUTY_STUDENTS = tuple(x.strip() for x in _duty_students if x.strip())
+DUTY_START_DATE = os.getenv("DUTY_START_DATE", "2026-10-19").strip()
 
 # Во сколько (Europe/Kyiv, ЧЧ:ММ) у неділю ввечері слати окреме
 # повідомлення адмінам про тип наступного тижня (школа/вдома).
