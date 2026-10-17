@@ -337,7 +337,7 @@ boot();
 setInterval(async()=>{if($("sheet").classList.contains("on")||tab==="adm")return;await load();if(tab==="dut")await loadDutySchedule();render()},15000);
 setInterval(async()=>{await pingActivity();if(tab!=="adm"||$("sheet").classList.contains("on"))return;await loadActivity();const section=$("activity-section");if(section){const wasOpen=section.open,holder=document.createElement("div");holder.innerHTML=activityBlock();const updated=holder.querySelector("#activity-section");if(updated){updated.open=wasOpen;section.replaceWith(updated)}}},15000);
 </script>
-<template id=" ua-map-source><svg
+<template id="ua-map-source"><svg
 	xmlns="http://www.w3.org/2000/svg"
 	viewBox="0 0 1000 670"
 	aria-label="Map of Ukraine"
@@ -473,5 +473,6 @@ setInterval(async()=>{await pingActivity();if(tab!=="adm"||$("sheet").classList.
 		id="zhytomyr"
 	/>
 </svg>
-</template>\n</body>
+</template>
+</body>
 </html>
