@@ -126,6 +126,10 @@ label{margin:0 0 7px;font-size:11px;font-weight:700;letter-spacing:.045em;text-t
 @media(hover:hover){.row:hover{border-color:var(--line);background:color-mix(in srgb,var(--ac) 5%,var(--card))}.strip button:hover{transform:translateY(-2px)}.tabs button:hover{color:var(--tx)}}
 @media(max-width:430px){body{padding-top:max(14px,env(safe-area-inset-top,0px));padding-bottom:calc(101px + env(safe-area-inset-bottom,0px))}.strip{gap:6px}.strip button{min-height:62px;border-radius:16px}.row{grid-template-columns:44px 4px minmax(0,1fr) auto;gap:10px;padding:12px 9px;border-radius:17px}.tabs{gap:3px;padding-left:8px;padding-right:8px}.tabs button{padding-left:3px;padding-right:3px;font-size:11px}.tabs .theme-toggle{min-width:61px;padding:7px 6px}.map-card iframe{height:min(54vh,390px);min-height:280px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+@media(min-width:1000px){body{max-width:1440px;padding:34px 52px calc(118px + env(safe-area-inset-bottom,0px))}.tabs{width:min(100%,1440px);padding-left:52px;padding-right:52px}.strip{max-width:920px}.two{gap:14px}.box{padding:17px 19px}.row{grid-template-columns:64px 4px minmax(0,1fr) auto;gap:15px;padding-top:15px;padding-bottom:15px}.bd b{font-size:17px}.bd span{font-size:13px}}
+.fullscreen-toggle{display:none}.tabs .fullscreen-toggle{flex:0 0 auto;align-items:center;justify-content:center;gap:7px;min-width:142px;padding:8px 13px;border:1px solid var(--line);background:var(--surface);color:var(--tx)}.fullscreen-toggle svg{width:18px;height:18px;flex:none}
+@media(min-width:800px){.fullscreen-toggle{display:flex}}
+@media(max-width:999px) and (min-width:800px){body{max-width:1000px;padding-left:30px;padding-right:30px}.tabs{width:min(100%,1000px);padding-left:30px;padding-right:30px}}
 </style>
 </head>
 <body>
@@ -161,6 +165,9 @@ try{const savedTheme=localStorage.getItem("ui-theme");if(savedTheme==="light"||s
 function effectiveTheme(){return document.documentElement.dataset.theme||tg?.colorScheme||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}
 function themeControl(){const dark=effectiveTheme()==="dark";return `<button class="theme-toggle" type="button" data-theme-toggle title="Перемкнути на ${dark?"світлу":"темну"} тему" aria-label="Перемкнути на ${dark?"світлу":"темну"} тему"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">${dark?'<circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>':'<path d="M20.2 15.4A8.5 8.5 0 0 1 8.6 3.8 8.6 8.6 0 1 0 20.2 15.4Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'}</svg><span>${dark?"Світла":"Темна"}</span></button>`}
 function toggleTheme(){const next=effectiveTheme()==="dark"?"light":"dark";document.documentElement.dataset.theme=next;try{localStorage.setItem("ui-theme",next)}catch(e){}render()}
+function fullscreenControl(){return `<button class="fullscreen-toggle" type="button" data-fullscreen-toggle title="На весь екран" aria-label="На весь екран"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>На весь екран</span></button>`}
+function syncFullscreenButton(){const b=document.querySelector("[data-fullscreen-toggle]");if(!b)return;const active=!!(tg?.isFullscreen||document.fullscreenElement),label=active?"Звичайний режим":"На весь екран";b.querySelector("span").textContent=label;b.title=label;b.setAttribute("aria-label",label)}
+document.addEventListener("fullscreenchange",syncFullscreenButton);try{tg?.onEvent("fullscreenChanged",syncFullscreenButton)}catch(_){ }
 const E=l=>l.end,F=l=>l.early_end||l.end;
 let notes={};try{notes=JSON.parse(localStorage.getItem("hw")||"{}")}catch(e){}
 const saveN=()=>{try{localStorage.setItem("hw",JSON.stringify(notes))}catch(e){}};
@@ -313,9 +320,9 @@ function render(){
  A.innerHTML=tab==="sch"?sch():tab==="al"?alr():tab==="dut"?dutyPage():adm();
  if(tab==="adm")A.querySelectorAll(".admin-fold").forEach((x,i)=>{if(i<openFolds.length)x.open=openFolds[i]});
  const a=st.alert,T=[["sch","Розклад"],["dut","Чергові"],["al",a.active?"🚨 Тривоги":"Тривоги"]];if(admin)T.push(["adm","Керування"]);
- $("tabs").innerHTML=T.map(([k,n])=>`<button data-t="${k}" class="${k===tab?"on":""}">${n}</button>`).join("")+themeControl();
+ $("tabs").innerHTML=T.map(([k,n])=>`<button data-t="${k}" class="${k===tab?"on":""}">${n}</button>`).join("")+themeControl()+fullscreenControl();syncFullscreenButton();
 }
-$("tabs").onclick=async e=>{const b=e.target.closest("button");if(!b)return;if(b.hasAttribute("data-theme-toggle")){toggleTheme();return}tab=b.dataset.t;hap();await pingActivity();if(tab==="adm")await loadAdmin2();if(tab==="dut")await loadDutySchedule();render();scrollTo(0,0)};
+$("tabs").onclick=async e=>{const b=e.target.closest("button");if(!b)return;if(b.hasAttribute("data-theme-toggle")){toggleTheme();return}if(b.hasAttribute("data-fullscreen-toggle")){try{if(tg&&typeof tg.requestFullscreen==="function"){if(tg.isFullscreen)tg.exitFullscreen();else tg.requestFullscreen()}else if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}catch(_){toast("Повноекранний режим недоступний")}syncFullscreenButton();return}tab=b.dataset.t;hap();await pingActivity();if(tab==="adm")await loadAdmin2();if(tab==="dut")await loadDutySchedule();render();scrollTo(0,0)};
 const loadAdmin2=async()=>{await loadAdminDay();await loadActivity()};
 $("app").onclick=async e=>{const b=e.target.closest("button");if(!b)return;const D_=b.dataset;
  if(D_.appMode){const mode=D_.appMode,label={open:"Застосунок відкрито",maintenance:"Технічні роботи увімкнено",stopped:"Застосунок зупинено"}[mode];return act(()=>post("/api/admin/settings",{key:"app_mode",value:mode}),label)}
