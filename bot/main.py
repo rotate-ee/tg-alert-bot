@@ -779,10 +779,10 @@ async def remote_confirmation_daily():
 
 def _level_emoji_and_label(level: str | None) -> tuple[str, str]:
     if level == "red":
-        return "🔴", "Червоний рівень небезпеки"
+        return "🔴", "Червоний рівень"
     if level == "yellow":
-        return "🟡", "Жовтий рівень небезпеки"
-    return "🔴", "Рівень небезпеки не визначено"
+        return "🟡", "Жовтий рівень"
+    return "🔴", "Рівень не визначено"
 
 
 def _in_notify_window(now: datetime) -> bool:
@@ -869,8 +869,7 @@ async def watch_alerts():
                         emoji, label = _level_emoji_and_label(level)
                         sent = await bot.send_message(
                             config.CHAT_ID,
-                            f"{emoji} <b>Повітряна тривога</b>\n📍 {escape(config.REGION_TITLE)}\n"
-                            f"⚠️ {escape(label)}\nПерейдіть в укриття та стежте за офіційними повідомленнями.",
+                            f"{emoji} <b>Тривога · {escape(config.REGION_TITLE)}</b>\n{escape(label)}",
                             parse_mode=ParseMode.HTML,
                         )
                         old_message_id = last_ended_message_id
@@ -882,7 +881,7 @@ async def watch_alerts():
                         emoji, label = _level_emoji_and_label(level)
                         sent = await bot.send_message(
                             config.CHAT_ID,
-                            f"⚠️ <b>Змінився рівень небезпеки</b>\n{emoji} {escape(label)}\n📍 {escape(config.REGION_TITLE)}",
+                            f"⚠️ <b>Рівень змінився</b>\n{emoji} {escape(label)} · {escape(config.REGION_TITLE)}",
                             parse_mode=ParseMode.HTML,
                         )
                         old_message_id = last_start_message_id
