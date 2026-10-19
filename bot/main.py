@@ -817,65 +817,78 @@ async def watch_alerts():
     # у чаті лишається тільки одне, найсвіжіше повідомлення про статус.
     last_start_message_id: int | None = None
     last_ended_message_id: int | None = None
+    pending_notifications: list[tuple[str, str | None]] = []
 
     async with aiohttp.ClientSession() as session:
         while True:
-            event = await alert_watcher.poll_once(session)
-            now = datetime.now(KYIV_TZ)
-            is_weekend = now.weekday() >= 5  # 5=субота, 6=неділя
-            should_notify = (
-                (config.NOTIFY_ALERTS_ON_WEEKENDS or not is_weekend) and _in_notify_window(now)
-            )
+            try:
+                event = await alert_watcher.poll_once(session)
+                now = datetime.now(KYIV_TZ)
+                is_weekend = now.weekday() >= 5
+                should_notify = (
+                    (config.NOTIFY_ALERTS_ON_WEEKENDS or not is_weekend)
+                    and _in_notify_window(now)
+                )
 
-            if event == "ended":
-                if should_notify:
-                    # старе повідомлення "тривога почалась" більше не актуальне
-                    await _try_delete(config.CHAT_ID, last_start_message_id)
-                    last_start_message_id = None
+                if event == "ended" and should_notify:
+                    pending_notifications.append(("ended", None))
+                elif event == "started" and config.NOTIFY_ON_START and should_notify:
+                    pending_notifications.append(("started", alert_watcher.level))
+                elif event == "level_changed" and config.NOTIFY_ON_START and should_notify:
+                    pending_notifications.append(("level_changed", alert_watcher.level))
+                elif event in ("started", "ended", "level_changed"):
+                    log.info("Сповіщення про %s пропущено через налаштування часу/вихідних", event)
 
-                    text = format_status_message("🟢 Відбій тривоги")
-                    log.info("Отбой тревоги, отправляю сообщение")
-                    sent = await bot.send_message(config.CHAT_ID, text)
-                    last_ended_message_id = sent.message_id
-                else:
-                    log.info("Отбой тревоги у вихідний - сповіщення пропускаю")
+                if event == "started":
+                    current, _, _, _ = find_current_and_next(datetime.now(KYIV_TZ))
+                    if current is not None:
+                        log.info("Питаю адмінів, чи відпустили з %s-го уроку", current["number"])
+                        await ask_admins_if_dismissed(current, datetime.now(KYIV_TZ).date())
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # Keep the monitor alive even if one poll or a related action fails.
+                log.exception("Помилка під час перевірки стану тривоги")
 
-            elif event == "started" and config.NOTIFY_ON_START:
-                if should_notify:
-                    # старе повідомлення "відбій" з минулого разу теж вже не актуальне
-                    await _try_delete(config.CHAT_ID, last_ended_message_id)
-                    last_ended_message_id = None
-
-                    emoji, label = _level_emoji_and_label(alert_watcher.level)
-                    log.info("Тревога началась (рівень: %s), отправляю уведомление", alert_watcher.level)
-                    sent = await bot.send_message(
-                        config.CHAT_ID,
-                        f"{emoji} {label}\n«{config.REGION_TITLE}»",
-                    )
-                    last_start_message_id = sent.message_id
-                else:
-                    log.info("Тривога почалась у вихідний - сповіщення пропускаю")
-
-            elif event == "level_changed" and config.NOTIFY_ON_START:
-                if should_notify:
-                    # рівень тривоги змінився - оновлюємо повідомлення на найсвіжіше
-                    await _try_delete(config.CHAT_ID, last_start_message_id)
-
-                    emoji, label = _level_emoji_and_label(alert_watcher.level)
-                    log.info("Рівень тривоги змінився на %s, оновлюю повідомлення", alert_watcher.level)
-                    sent = await bot.send_message(
-                        config.CHAT_ID,
-                        f"⚠️ Рівень тривоги змінено:\n{emoji} {label}\n«{config.REGION_TITLE}»",
-                    )
-                    last_start_message_id = sent.message_id
-                else:
-                    log.info("Рівень тривоги змінився у вихідний - сповіщення пропускаю")
-
-            if event == "started":
-                current, _, _, _ = find_current_and_next(datetime.now(KYIV_TZ))
-                if current is not None:
-                    log.info("Питаю адмінів, чи відпустили з %s-го уроку", current["number"])
-                    await ask_admins_if_dismissed(current, datetime.now(KYIV_TZ).date())
+            # Do not discard a state change when Telegram is temporarily
+            # unavailable. Retry the oldest notification on the next poll.
+            if pending_notifications:
+                event, level = pending_notifications[0]
+                try:
+                    if event == "ended":
+                        text = format_status_message("🟢 Відбій тривоги")
+                        sent = await bot.send_message(config.CHAT_ID, text)
+                        old_message_id = last_start_message_id
+                        last_start_message_id = None
+                        last_ended_message_id = sent.message_id
+                        await _try_delete(config.CHAT_ID, old_message_id)
+                        log.info("Відбій тривоги надіслано в чат")
+                    elif event == "started":
+                        emoji, label = _level_emoji_and_label(level)
+                        sent = await bot.send_message(
+                            config.CHAT_ID,
+                            f"{emoji} {label}\n«{config.REGION_TITLE}»",
+                        )
+                        old_message_id = last_ended_message_id
+                        last_ended_message_id = None
+                        last_start_message_id = sent.message_id
+                        await _try_delete(config.CHAT_ID, old_message_id)
+                        log.info("Тривогу надіслано в чат (рівень: %s)", level)
+                    else:
+                        emoji, label = _level_emoji_and_label(level)
+                        sent = await bot.send_message(
+                            config.CHAT_ID,
+                            f"⚠️ Рівень тривоги змінено:\n{emoji} {label}\n«{config.REGION_TITLE}»",
+                        )
+                        old_message_id = last_start_message_id
+                        last_start_message_id = sent.message_id
+                        await _try_delete(config.CHAT_ID, old_message_id)
+                        log.info("Оновлений рівень тривоги надіслано в чат: %s", level)
+                    pending_notifications.pop(0)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    log.exception("Не вдалося надіслати сповіщення про тривогу; повторю спробу")
 
             await asyncio.sleep(config.POLL_INTERVAL_SECONDS)
 

@@ -49,16 +49,33 @@ class AlertWatcher:
         async with session.get(API_URL, headers=headers, timeout=15) as resp:
             resp.raise_for_status()
             data = await resp.json()
-            return data.get("alerts", [])
+            alerts = data.get("alerts") if isinstance(data, dict) else None
+            if not isinstance(alerts, list):
+                raise ValueError("alerts.in.ua returned a response without an alerts list")
+            return alerts
 
     def _find_region_air_raid(self, alerts: list[dict]) -> dict | None:
+        region = self.region_title.strip().casefold()
+        matches = []
         for alert in alerts:
-            if (
-                alert.get("alert_type") == ALERT_TYPE
-                and self.region_title.lower() in (alert.get("location_title") or "").lower()
-            ):
-                return alert
-        return None
+            if alert.get("alert_type") != ALERT_TYPE:
+                continue
+            # Alerts can now be reported for individual raions/communities.
+            # In that case location_title is not the oblast name; the API
+            # includes the parent oblast in location_oblast.
+            locations = (
+                alert.get("location_title"),
+                alert.get("location_oblast"),
+                alert.get("location_raion"),
+            )
+            if any(region in (location or "").strip().casefold() for location in locations):
+                matches.append(alert)
+
+        if not matches:
+            return None
+        # If simultaneous partial alerts have different levels, report the
+        # strongest active level for the whole configured region.
+        return next((a for a in matches if a.get("alert_level") == "red"), matches[0])
 
     async def poll_once(self, session: aiohttp.ClientSession) -> str | None:
         """
