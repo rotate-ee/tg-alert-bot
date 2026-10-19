@@ -124,6 +124,7 @@ label{margin:0 0 7px;font-size:11px;font-weight:700;letter-spacing:.045em;text-t
 .toast{border:1px solid color-mix(in srgb,var(--bg) 15%,transparent);backdrop-filter:blur(12px)}
 .maint-page{max-width:590px}.maint-card{border-radius:30px}.maint-page .map-card{margin-top:20px}
 @media(hover:hover){.row:hover{border-color:var(--line);background:color-mix(in srgb,var(--ac) 5%,var(--card))}.strip button:hover{transform:translateY(-2px)}.tabs button:hover{color:var(--tx)}}
+@keyframes tabEnter{from{opacity:0;transform:translateY(9px) scale(.995)}to{opacity:1;transform:translateY(0) scale(1)}}#app.tab-enter{animation:tabEnter .24s cubic-bezier(.2,.75,.25,1) both;transform-origin:50% 0}
 @media(max-width:430px){body{padding-top:max(14px,env(safe-area-inset-top,0px));padding-bottom:calc(101px + env(safe-area-inset-bottom,0px))}.strip{gap:6px}.strip button{min-height:62px;border-radius:16px}.row{grid-template-columns:44px 4px minmax(0,1fr) auto;gap:10px;padding:12px 9px;border-radius:17px}.tabs{gap:3px;padding-left:8px;padding-right:8px}.tabs button{padding-left:3px;padding-right:3px;font-size:11px}.tabs .theme-toggle{min-width:61px;padding:7px 6px}.map-card iframe{height:min(54vh,390px);min-height:280px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 @media(min-width:1000px){body{max-width:1440px;padding:34px 52px calc(118px + env(safe-area-inset-bottom,0px))}.tabs{width:min(100%,1440px);padding-left:52px;padding-right:52px}.strip{max-width:920px}.two{gap:14px}.box{padding:17px 19px}.row{grid-template-columns:64px 4px minmax(0,1fr) auto;gap:15px;padding-top:15px;padding-bottom:15px}.bd b{font-size:17px}.bd span{font-size:13px}}
@@ -334,7 +335,16 @@ function render(){
  const a=st.alert,T=[["sch","Розклад"],["dut","Чергові"],["al",a.active?"🚨 Тривоги":"Тривоги"]];if(admin)T.push(["adm","Керування"]);
  $("tabs").innerHTML=T.map(([k,n])=>`<button data-t="${k}" class="${k===tab?"on":""}">${n}</button>`).join("")+themeControl()+fullscreenControl();syncFullscreenButton();
 }
-$("tabs").onclick=async e=>{const b=e.target.closest("button");if(!b)return;if(b.hasAttribute("data-theme-toggle")){toggleTheme();return}if(b.hasAttribute("data-fullscreen-toggle")){try{if(tg&&typeof tg.requestFullscreen==="function"){if(tg.isFullscreen)tg.exitFullscreen();else tg.requestFullscreen()}else if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}catch(_){toast("Повноекранний режим недоступний")}syncFullscreenButton();return}tab=b.dataset.t;hap();await pingActivity();if(tab==="adm")await loadAdmin2();if(tab==="dut")await loadDutySchedule();render();scrollTo(0,0)};
+function renderTabTransition(){
+ const app=$("app");
+ app.classList.remove("tab-enter");
+ render();
+ if(window.matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+ void app.offsetWidth;
+ app.classList.add("tab-enter");
+ app.addEventListener("animationend",e=>{if(e.animationName==="tabEnter")app.classList.remove("tab-enter")},{once:true});
+}
+$("tabs").onclick=async e=>{const b=e.target.closest("button");if(!b)return;if(b.hasAttribute("data-theme-toggle")){toggleTheme();return}if(b.hasAttribute("data-fullscreen-toggle")){try{if(tg&&typeof tg.requestFullscreen==="function"){if(tg.isFullscreen)tg.exitFullscreen();else tg.requestFullscreen()}else if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}catch(_){toast("Повноекранний режим недоступний")}syncFullscreenButton();return}const nextTab=b.dataset.t,changed=nextTab!==tab;tab=nextTab;hap();await pingActivity();if(tab==="adm")await loadAdmin2();if(tab==="dut")await loadDutySchedule();if(changed)renderTabTransition();else render();scrollTo(0,0)};
 const loadAdmin2=async()=>{await loadAdminDay();await loadActivity()};
 $("app").onclick=async e=>{const b=e.target.closest("button");if(!b)return;const D_=b.dataset;
  if(D_.appMode){const mode=D_.appMode,label={open:"Застосунок відкрито",maintenance:"Технічні роботи увімкнено",stopped:"Застосунок зупинено"}[mode];return act(()=>post("/api/admin/settings",{key:"app_mode",value:mode}),label)}
