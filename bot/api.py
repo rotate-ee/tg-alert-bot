@@ -27,6 +27,7 @@ import extra_lessons
 import holidays
 import lessons
 import remote_overrides
+import remote_lesson_overrides
 import remote_periods
 import renumber
 import settings
@@ -170,11 +171,12 @@ def _day_block(d: date) -> dict:
         extra_nums = {e["number"] for e in extra_lessons.get_extra_lessons(d)}
         school = lessons.is_school_week(d)
         for l in lessons.get_lessons_for_date(d):
+            is_remote = lessons.is_lesson_remote_today(l, d)
             items.append({
                 "number": l["number"], "name": l["name"], "start": l["start"], "end": l["end"],
-                "room": l["room"] if school is not False else None,
-                "cancelled": l["cancelled"], "remote": lessons.is_lesson_remote_today(l, d),
-                "remote_capable": bool(l["remote"]) and school is not False,
+                "room": l["room"] if school is not False and not is_remote else None,
+                "cancelled": l["cancelled"], "remote": is_remote,
+                "remote_capable": school is not False,
                 "early_end": early_end.get_early_end(d, l["number"]),
                 "extra": l["number"] in extra_nums,
             })
@@ -330,6 +332,28 @@ async def a_inperson(request: web.Request) -> web.Response:
         remote_overrides.mark_in_person(d, num)
     else:
         remote_overrides.clear_in_person(d, num)
+    return web.json_response({"ok": True})
+
+
+async def a_remote(request: web.Request) -> web.Response:
+    _need_admin(request)
+    b = await request.json()
+    d, num = _d(b["date"]), int(b["number"])
+    lesson = lessons.get_lesson_by_number(num, d)
+    if lesson is None:
+        raise ValueError("lesson")
+    if b.get("clear"):
+        remote_lesson_overrides.clear_remote(d, num)
+        remote_overrides.clear_in_person(d, num)
+    elif b.get("value", True):
+        remote_lesson_overrides.set_remote(d, num)
+        remote_overrides.clear_in_person(d, num)
+    else:
+        remote_lesson_overrides.clear_remote(d, num)
+        if lesson["remote"]:
+            remote_overrides.mark_in_person(d, num)
+        else:
+            remote_overrides.clear_in_person(d, num)
     return web.json_response({"ok": True})
 
 
@@ -505,6 +529,7 @@ async def start(bot, watcher) -> web.AppRunner:
     app.router.add_post("/api/admin/endnow", a_endnow)
     app.router.add_post("/api/admin/renumber", a_renumber)
     app.router.add_post("/api/admin/inperson", a_inperson)
+    app.router.add_post("/api/admin/remote", a_remote)
     app.router.add_post("/api/admin/settings", a_settings)
     app.router.add_get("/api/admin/overview", a_overview)
     app.router.add_post("/api/admin/announce", a_announce)

@@ -15,6 +15,7 @@ import early_end
 import extra_lessons
 import holidays
 import remote_overrides
+import remote_lesson_overrides
 import remote_periods
 import renumber
 import settings
@@ -50,6 +51,8 @@ def is_lesson_remote_today(lesson: dict, d: date) -> bool:
       підтвердив "Так, буде очно" на сьогодні - False.
     - Інакше (типовий випадок за замовчуванням) - True.
     """
+    if remote_lesson_overrides.is_remote(d, lesson["number"]):
+        return True
     if not lesson["remote"]:
         return False
     if is_school_week(d) is False:
