@@ -52,7 +52,8 @@ def record(user: dict, page: str) -> None:
     new_session = (not last_seen or last_seen.date() != now.date()
                    or (now - last_seen).total_seconds() > SESSION_GAP_SECONDS)
 
-    day = data["days"].setdefault(key, {"users": [], "sessions": 0, "views": {}})
+    day = data["days"].setdefault(key, {"users": [], "sessions": 0, "views": {}, "visits": []})
+    day.setdefault("visits", [])
     if uid not in day["users"]:
         day["users"].append(uid)
     if new_session:
@@ -61,8 +62,28 @@ def record(user: dict, page: str) -> None:
         day["views"][page] = day["views"].get(page, 0) + 1
 
     first = " ".join(x for x in (user.get("first_name"), user.get("last_name")) if x).strip()
+    name = first or user.get("username") or "Користувач Telegram"
+    visits = day["visits"]
+    visit = next((v for v in reversed(visits) if v.get("user_id") == uid), None)
+    if new_session or visit is None:
+        visit = {
+            "user_id": uid,
+            "name": name,
+            "username": user.get("username") or "",
+            "page": page,
+            "entered_at": now.isoformat(timespec="seconds"),
+            "last_seen": now.isoformat(timespec="seconds"),
+        }
+        visits.append(visit)
+    else:
+        visit.update({
+            "name": name,
+            "username": user.get("username") or "",
+            "page": page,
+            "last_seen": now.isoformat(timespec="seconds"),
+        })
     users[uid] = {
-        "name": first or user.get("username") or "Користувач Telegram",
+        "name": name,
         "username": user.get("username") or "",
         "page": page,
         "last_seen": now.isoformat(timespec="seconds"),
@@ -102,6 +123,7 @@ def overview() -> dict:
     month_users = {uid for d in month_days for uid in d.get("users", [])}
     return {
         "active": active,
+        "today_visits": list(reversed(today_data.get("visits", []))),
         "stats": {
             "active_now": len(active),
             "today_unique": len(today_data.get("users", [])),
