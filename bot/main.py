@@ -6,6 +6,7 @@ Telegram-бот: знает расписание уроков класса и п
     python bot/main.py
 """
 import asyncio
+from html import escape
 import logging
 import os
 from datetime import date, datetime, time, timedelta
@@ -14,6 +15,7 @@ from zoneinfo import ZoneInfo
 import aiohttp
 import api
 from aiogram import Bot, Dispatcher, F
+from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
@@ -85,7 +87,7 @@ alert_watcher = AlertWatcher(token=config.ALERTS_TOKEN, region_title=config.REGI
 @dp.message(Command("now"))
 async def cmd_now(message: Message):
     text = format_status_message("📚 Розклад")
-    await message.answer(text)
+    await message.answer(text, parse_mode=ParseMode.HTML)
 
 
 @dp.message(Command("today"))
@@ -93,44 +95,39 @@ async def cmd_today(message: Message):
     text = format_day_schedule_message("📅 Розклад на сьогодні")
     if text is None:
         text = "Сьогодні уроків немає (вихідний)."
-    await message.answer(text)
+    await message.answer(text, parse_mode=ParseMode.HTML)
 
 
 @dp.message(Command("week"))
 async def cmd_week(message: Message):
     text = format_week_message()
-    await message.answer(text)
+    await message.answer(text, parse_mode=ParseMode.HTML)
 
 
 @dp.message(Command("start", "help"))
 async def cmd_help(message: Message):
     text = (
-        "Привіт! Я стежу за повітряною тривогою в "
-        f"«{config.REGION_TITLE}» і після відбою пишу сюди, "
-        "який зараз урок.\n\n"
-        "Команди:\n"
-        "/now — показати поточний/наступний урок прямо зараз\n"
-        "/today — повний розклад на сьогодні\n"
-        "/week — розклад на весь тиждень"
-        + ("\n/app — відкрити розклад у міні-застосунку" if MINIAPP_URL else "")
+        f"👋 <b>Вітаю!</b> Стежу за повітряними тривогами в <b>{escape(config.REGION_TITLE)}</b> "
+        "і надсилаю актуальну інформацію про уроки.\n\n"
+        "<b>Швидкі команди</b>\n"
+        "<code>/now</code> — поточний або наступний урок\n"
+        "<code>/today</code> — розклад на сьогодні\n"
+        "<code>/week</code> — розклад на тиждень"
+        + ("\n<code>/app</code> — відкрити розклад у застосунку" if MINIAPP_URL else "")
     )
     if message.chat.type == "private" and message.from_user.id in config.ADMIN_IDS:
         text += (
-            "\n\nКоманди для відмітки скасованих уроків (тільки в ЛС):\n"
-            "/cancel <номер> — скасувати урок сьогодні (наприклад /cancel 3)\n"
-            "/cancel <номер> <РРРР-ММ-ДД> — скасувати урок на конкретну дату\n"
-            "/uncancel <номер> [дата] — повернути урок назад\n"
-            "/cancelled [дата] — список скасованих на день\n"
-            "/diag — перевірити, чи зберігаються скасування на диску\n"
-            "/settime <номер> <початок> <кінець> [дата] — змінити час уроку на цей день\n"
-            "/resettime <номер> [дата] — повернути стандартний час уроку\n"
-            "/addlesson <номер> <початок> <кінець> <назва> [дата] — додати позаплановий урок\n"
-            "/removelesson <номер> [дата] — прибрати доданий урок\n"
-            "/announce <текст> — надіслати оголошення в груповий чат\n"
-            "/endnow [номер] — позначити, що урок закінчився саме зараз\n"
-            "/undoend <номер> [дата] — прибрати позначку дострокового завершення"
+            "\n\n<b>Адміністрування</b> <i>(лише в особистих повідомленнях)</i>\n"
+            "<code>/cancel</code> — скасувати урок; можна вказати номер і дату\n"
+            "<code>/uncancel</code> — повернути урок у розклад\n"
+            "<code>/cancelled</code> — показати скасовані уроки\n"
+            "<code>/diag</code> — перевірити збереження даних\n"
+            "<code>/settime</code> / <code>/resettime</code> — змінити або відновити час\n"
+            "<code>/addlesson</code> / <code>/removelesson</code> — керувати додатковими уроками\n"
+            "<code>/announce</code> — надіслати оголошення в чат\n"
+            "<code>/endnow</code> / <code>/undoend</code> — керувати позначкою раннього завершення"
         )
-    await message.answer(text)
+    await message.answer(text, parse_mode=ParseMode.HTML)
 
 
 @dp.message(Command("app"))
@@ -386,7 +383,11 @@ async def cmd_announce(message: Message):
         return
 
     text = parts[1].strip()
-    await bot.send_message(config.CHAT_ID, f"📢 {text}")
+    await bot.send_message(
+        config.CHAT_ID,
+        f"📣 <b>Оголошення</b>\n{escape(text)}",
+        parse_mode=ParseMode.HTML,
+    )
     await message.answer("✅ Надіслано в чат")
 
 
@@ -616,7 +617,7 @@ async def morning_digest():
         text = format_day_schedule_message("📅 Розклад на сьогодні")
         if text is not None:
             log.info("Відправляю ранковий розклад")
-            await bot.send_message(config.CHAT_ID, text)
+            await bot.send_message(config.CHAT_ID, text, parse_mode=ParseMode.HTML)
         else:
             log.info("Сьогодні уроків немає (вихідний) - ранкову розсилку пропускаю")
 
@@ -674,11 +675,12 @@ async def lesson_reminders():
             log.info("Зараз триває тривога - нагадування про %s-й урок пропускаю", lesson["number"])
         elif fresh and not fresh["cancelled"]:
             text = (
-                f"⏰ За {minutes_before} хв: {fresh['number']}-й урок «{fresh['name']}», "
-                f"{format_lesson_time(fresh, today)}{format_lesson_room(fresh, today)}"
+                f"⏰ <b>За {minutes_before} хв — урок</b>\n"
+                f"{fresh['number']}-й · <b>{escape(fresh['name'])}</b>\n"
+                f"🕒 <code>{escape(format_lesson_time(fresh, today) + format_lesson_room(fresh, today))}</code>"
             )
             log.info("Надсилаю нагадування про %s-й урок", fresh["number"])
-            sent = await bot.send_message(config.CHAT_ID, text)
+            sent = await bot.send_message(config.CHAT_ID, text, parse_mode=ParseMode.HTML)
             # видалимо це повідомлення, як тільки урок почнеться
             asyncio.create_task(_delete_message_later(config.CHAT_ID, sent.message_id, start_dt))
         else:
@@ -857,7 +859,7 @@ async def watch_alerts():
                 try:
                     if event == "ended":
                         text = format_status_message("🟢 Відбій тривоги")
-                        sent = await bot.send_message(config.CHAT_ID, text)
+                        sent = await bot.send_message(config.CHAT_ID, text, parse_mode=ParseMode.HTML)
                         old_message_id = last_start_message_id
                         last_start_message_id = None
                         last_ended_message_id = sent.message_id
@@ -867,7 +869,8 @@ async def watch_alerts():
                         emoji, label = _level_emoji_and_label(level)
                         sent = await bot.send_message(
                             config.CHAT_ID,
-                            f"{emoji} {label}\n«{config.REGION_TITLE}»",
+                            f"{emoji} <b>{escape(label)}</b>\n📍 {escape(config.REGION_TITLE)}",
+                            parse_mode=ParseMode.HTML,
                         )
                         old_message_id = last_ended_message_id
                         last_ended_message_id = None
@@ -878,7 +881,8 @@ async def watch_alerts():
                         emoji, label = _level_emoji_and_label(level)
                         sent = await bot.send_message(
                             config.CHAT_ID,
-                            f"⚠️ Рівень тривоги змінено:\n{emoji} {label}\n«{config.REGION_TITLE}»",
+                            f"⚠️ <b>Рівень тривоги змінено</b>\n{emoji} <b>{escape(label)}</b>\n📍 {escape(config.REGION_TITLE)}",
+                            parse_mode=ParseMode.HTML,
                         )
                         old_message_id = last_start_message_id
                         last_start_message_id = sent.message_id

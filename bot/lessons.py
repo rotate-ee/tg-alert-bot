@@ -4,6 +4,7 @@
 уроков, отменённых учителями (см. cancellations.py).
 """
 import json
+from html import escape
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -326,21 +327,24 @@ def format_week_message(now: datetime | None = None) -> str:
 
         day_name = _DAY_NAMES[d.weekday()]
         is_today = d == now.date()
-        header = f"📌 {day_name}, {d.strftime('%d.%m')}" + (" (сьогодні)" if is_today else "")
+        header = f"📌 {day_name}, {d.strftime('%d.%m')}" + (" · сьогодні" if is_today else "")
 
-        lines = [header, "─" * 22]
+        lines = [f"<b>{escape(header)}</b>"]
         for lesson in lessons:
             time_part = format_lesson_time(lesson, d)
             room_part = format_lesson_room(lesson, d)
             status = format_cancelled_status(lesson, d)
-            lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{room_part}{status}")
+            lines.append(
+                f"<code>{lesson['number']:02d}</code>  <b>{escape(lesson['name'])}</b>"
+                f"\n       {escape(time_part + room_part + status)}"
+            )
 
         blocks.append("\n".join(lines))
 
-    title = f"🗓 Розклад на тиждень ({monday.strftime('%d.%m')}–{(monday + timedelta(days=4)).strftime('%d.%m')})"
+    title = f"🗓 <b>РОЗКЛАД НА ТИЖДЕНЬ</b>\n{monday.strftime('%d.%m')} — {(monday + timedelta(days=4)).strftime('%d.%m')}"
     week_label = week_type_label(monday)
     if week_label:
-        title += f"\n{week_label}"
+        title += f"\n<i>{escape(week_label)}</i>"
 
     if not blocks:
         return f"{title}\n\nУроків на цьому тижні немає."
@@ -400,22 +404,31 @@ def format_status_message(prefix: str, now: datetime | None = None) -> str:
 
     if current:
         body = (
-            f"Зараз: {current['number']}-й урок «{current['name']}», "
-            f"{format_lesson_time(current, now.date())}{format_lesson_room(current, now.date())}"
+            f"🟢 <b>Зараз іде {current['number']}-й урок</b>\n"
+            f"{escape(current['name'])}\n"
+            f"⏰ <code>{escape(format_lesson_time(current, now.date()) + format_lesson_room(current, now.date()))}</code>"
         )
     elif upcoming:
         body = (
-            f"Уроків зараз немає. Наступний — {upcoming['number']}-й урок "
-            f"«{upcoming['name']}» о {upcoming['start']}"
+            f"☕ <b>Зараз перерва</b>\n"
+            f"Далі — {upcoming['number']}-й урок <b>{escape(upcoming['name'])}</b>\n"
+            f"⏰ Початок о <code>{escape(upcoming['start'])}</code>"
         )
     else:
-        body = "Уроків на сьогодні більше немає."
+        body = "✅ <b>Уроки на сьогодні закінчилися</b>"
 
     if remote_no_time_today:
-        names = ", ".join(f"{l['number']}-й «{l['name']}»" for l in remote_no_time_today)
-        body += f"\n\n(Дистанційно сьогодні також: {names})"
+        names = "\n".join(f"• {lesson['number']}-й урок — {escape(lesson['name'])}" for lesson in remote_no_time_today)
+        body += f"\n\n🏠 <b>Дистанційно без часу</b>\n{names}"
 
-    return f"{prefix}\n\n{body}"
+    if cancelled_today:
+        names = "\n".join(
+            f"• {lesson['number']}-й урок — {escape(lesson['name'])}{escape(format_cancelled_status(lesson, now.date()))}"
+            for lesson in cancelled_today
+        )
+        body += f"\n\n🚫 <b>Скасовано сьогодні</b>\n{names}"
+
+    return f"<b>{escape(prefix)}</b>\n\n{body}"
 
 
 def format_day_schedule_message(prefix: str, now: datetime | None = None) -> str | None:
@@ -436,11 +449,14 @@ def format_day_schedule_message(prefix: str, now: datetime | None = None) -> str
         time_part = format_lesson_time(lesson, now.date())
         room_part = format_lesson_room(lesson, now.date())
         status = format_cancelled_status(lesson, now.date())
-        lines.append(f"{lesson['number']}. {lesson['name']} — {time_part}{room_part}{status}")
+        lines.append(
+            f"<code>{lesson['number']:02d}</code>  <b>{escape(lesson['name'])}</b>"
+            f"\n       {escape(time_part + room_part + status)}"
+        )
 
     body = "\n".join(lines)
     week_label = week_type_label(now.date())
     if week_label:
-        body = f"{week_label}\n\n{body}"
+        body = f"<i>{escape(week_label)}</i>\n\n{body}"
 
-    return f"{prefix}\n\n{body}"
+    return f"<b>{escape(prefix)}</b>\n\n{body}"
