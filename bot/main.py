@@ -107,8 +107,8 @@ async def cmd_week(message: Message):
 @dp.message(Command("start", "help"))
 async def cmd_help(message: Message):
     text = (
-        f"👋 <b>Вітаю!</b> Стежу за повітряними тривогами в <b>{escape(config.REGION_TITLE)}</b> "
-        "і надсилаю актуальну інформацію про уроки.\n\n"
+        f"👋 <b>Вітаю!</b> Я повідомляю про повітряні тривоги в <b>{escape(config.REGION_TITLE)}</b> "
+        "і допомагаю швидко перевірити розклад уроків.\n\n"
         "<b>Швидкі команди</b>\n"
         "<code>/now</code> — поточний або наступний урок\n"
         "<code>/today</code> — розклад на сьогодні\n"
@@ -578,9 +578,9 @@ async def cb_in_person(callback: CallbackQuery):
         await callback.answer()
 
         room_part = format_lesson_room(fresh, d) if fresh else ""
-        announce = f"📢 Сьогодні {number}-й урок «{name}» буде ОЧНО{room_part}"
+        announce = f"🏫 <b>Зміна формату уроку</b>\n{number}-й урок «{escape(name)}» сьогодні відбудеться очно{escape(room_part)}"
         log.info("Оголошую в чаті: %s-й урок сьогодні очно", number)
-        await bot.send_message(config.CHAT_ID, announce)
+        await bot.send_message(config.CHAT_ID, announce, parse_mode=ParseMode.HTML)
     else:
         await callback.message.edit_text(callback.message.text + "\n\n➖ Ні, залишається дистанційно.")
         await callback.answer()
@@ -675,9 +675,9 @@ async def lesson_reminders():
             log.info("Зараз триває тривога - нагадування про %s-й урок пропускаю", lesson["number"])
         elif fresh and not fresh["cancelled"]:
             text = (
-                f"⏰ <b>За {minutes_before} хв — урок</b>\n"
-                f"{fresh['number']}-й · <b>{escape(fresh['name'])}</b>\n"
-                f"🕒 <code>{escape(format_lesson_time(fresh, today) + format_lesson_room(fresh, today))}</code>"
+                f"⏰ <b>До початку уроку {minutes_before} хв</b>\n"
+                f"{fresh['number']}-й урок · <b>{escape(fresh['name'])}</b>\n"
+                f"🕒 Початок о <code>{escape(format_lesson_time(fresh, today) + format_lesson_room(fresh, today))}</code>"
             )
             log.info("Надсилаю нагадування про %s-й урок", fresh["number"])
             sent = await bot.send_message(config.CHAT_ID, text, parse_mode=ParseMode.HTML)
@@ -779,10 +779,10 @@ async def remote_confirmation_daily():
 
 def _level_emoji_and_label(level: str | None) -> tuple[str, str]:
     if level == "red":
-        return "🔴", "Повітряна тривога! Червоний рівень небезпеки"
+        return "🔴", "Червоний рівень небезпеки"
     if level == "yellow":
-        return "🟡", "Повітряна тривога! Жовтий рівень небезпеки"
-    return "🔴", "Повітряна тривога"  # рівень невідомий - старий формат
+        return "🟡", "Жовтий рівень небезпеки"
+    return "🔴", "Рівень небезпеки не визначено"
 
 
 def _in_notify_window(now: datetime) -> bool:
@@ -858,7 +858,7 @@ async def watch_alerts():
                 event, level = pending_notifications[0]
                 try:
                     if event == "ended":
-                        text = format_status_message("🟢 Відбій тривоги")
+                        text = format_status_message("🟢 Відбій повітряної тривоги")
                         sent = await bot.send_message(config.CHAT_ID, text, parse_mode=ParseMode.HTML)
                         old_message_id = last_start_message_id
                         last_start_message_id = None
@@ -869,7 +869,8 @@ async def watch_alerts():
                         emoji, label = _level_emoji_and_label(level)
                         sent = await bot.send_message(
                             config.CHAT_ID,
-                            f"{emoji} <b>{escape(label)}</b>\n📍 {escape(config.REGION_TITLE)}",
+                            f"{emoji} <b>Повітряна тривога</b>\n📍 {escape(config.REGION_TITLE)}\n"
+                            f"⚠️ {escape(label)}\nПерейдіть в укриття та стежте за офіційними повідомленнями.",
                             parse_mode=ParseMode.HTML,
                         )
                         old_message_id = last_ended_message_id
@@ -881,7 +882,7 @@ async def watch_alerts():
                         emoji, label = _level_emoji_and_label(level)
                         sent = await bot.send_message(
                             config.CHAT_ID,
-                            f"⚠️ <b>Рівень тривоги змінено</b>\n{emoji} <b>{escape(label)}</b>\n📍 {escape(config.REGION_TITLE)}",
+                            f"⚠️ <b>Змінився рівень небезпеки</b>\n{emoji} {escape(label)}\n📍 {escape(config.REGION_TITLE)}",
                             parse_mode=ParseMode.HTML,
                         )
                         old_message_id = last_start_message_id

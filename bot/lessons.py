@@ -341,13 +341,13 @@ def format_week_message(now: datetime | None = None) -> str:
 
         blocks.append("\n".join(lines))
 
-    title = f"🗓 <b>РОЗКЛАД НА ТИЖДЕНЬ</b>\n{monday.strftime('%d.%m')} — {(monday + timedelta(days=4)).strftime('%d.%m')}"
+    title = f"📚 <b>Розклад на тиждень</b>\n{monday.strftime('%d.%m')} — {(monday + timedelta(days=4)).strftime('%d.%m')}"
     week_label = week_type_label(monday)
     if week_label:
         title += f"\n<i>{escape(week_label)}</i>"
 
     if not blocks:
-        return f"{title}\n\nУроків на цьому тижні немає."
+        return f"{title}\n\nНа цей тиждень уроків немає."
 
     return title + "\n\n" + "\n\n".join(blocks)
 
@@ -411,22 +411,22 @@ def format_status_message(prefix: str, now: datetime | None = None) -> str:
     elif upcoming:
         body = (
             f"☕ <b>Зараз перерва</b>\n"
-            f"Далі — {upcoming['number']}-й урок <b>{escape(upcoming['name'])}</b>\n"
+            f"Наступний — {upcoming['number']}-й урок <b>{escape(upcoming['name'])}</b>\n"
             f"⏰ Початок о <code>{escape(upcoming['start'])}</code>"
         )
     else:
-        body = "✅ <b>Уроки на сьогодні закінчилися</b>"
+        body = "✅ <b>На сьогодні уроків більше немає</b>"
 
     if remote_no_time_today:
         names = "\n".join(f"• {lesson['number']}-й урок — {escape(lesson['name'])}" for lesson in remote_no_time_today)
-        body += f"\n\n🏠 <b>Дистанційно без часу</b>\n{names}"
+        body += f"\n\n🏠 <b>Дистанційні уроки без фіксованого часу</b>\n{names}"
 
     if cancelled_today:
         names = "\n".join(
             f"• {lesson['number']}-й урок — {escape(lesson['name'])}{escape(format_cancelled_status(lesson, now.date()))}"
             for lesson in cancelled_today
         )
-        body += f"\n\n🚫 <b>Скасовано сьогодні</b>\n{names}"
+        body += f"\n\n🚫 <b>Скасовані уроки сьогодні</b>\n{names}"
 
     return f"<b>{escape(prefix)}</b>\n\n{body}"
 
