@@ -205,6 +205,24 @@ const lvl=a=>a.level==="red"?"Червоний рівень":a.level==="yellow"?
 const cls=a=>!a.active?"":a.level==="yellow"?"yl":"rd";
 const dur=m=>m<1?"щойно":fm(m);
 const since=a=>a.since?Math.max(0,Math.floor((Date.now()-Date.parse(a.since))/6e4)):null;
+function alertHistoryRows(history){
+ const t=iso(kyiv()),y=iso(new Date(U(t)-D));
+ return history.map(x=>{const s=x.start,d=s.slice(0,10),e=x.end,dur=Math.max(0,Math.round(((e?Date.parse(e):Date.now())-Date.parse(s))/6e4));
+  return `<div class="box hl"><div><b><i class="dot ${x.level==="red"?"red":""}"></i>${d===t?"Сьогодні":d===y?"Вчора":fd(d)}, ${s.slice(11,16)} – ${e?e.slice(11,16):"триває"}</b><span class="sm">${x.level==="red"?"Червоний":x.level==="yellow"?"Жовтий":"Рівень невідомий"} рівень</span></div><div class="sm">${fm(dur)||"<1 хв"}</div></div>`
+ }).join("")
+}
+function refreshAlertPage(){
+ const a=st.alert,status=$("alert-status"),checked=$("alert-checked"),stats=$("alert-stats"),empty=$("alert-history-empty"),rows=$("alert-history-list"),offlineNote=$("alert-offline");
+ if(!status)return;
+ const m=since(a),ago=a.last_ok?Math.floor((Date.now()-Date.parse(a.last_ok))/1e3):null;
+ status.className=`al ${a.active?cls(a):""}`;
+ status.innerHTML=`<div class="k">${a.active?"Повітряна тривога":"Зараз"}</div><div class="t">${a.active?lvl(a):"Тривоги немає"}</div><div class="k">${a.active?(m!==null?"Триває "+(m<1?"менше хвилини":fm(m)):"Триває"):"Можна не поспішати в укриття"}</div>`;
+ if(checked)checked.textContent=ago===null?"Ще не було перевірки":"Перевірено "+(ago<60?ago+" с":Math.floor(ago/60)+" хв")+" тому";
+ if(stats)stats.innerHTML=`<div class="box"><span class="sm">Сьогодні тривог</span><b>${a.today.count}</b></div><div class="box"><span class="sm">Загалом</span><b>${a.today.minutes} хв</b></div>`;
+ if(empty)empty.hidden=!!a.history.length;
+ if(rows)rows.innerHTML=alertHistoryRows(a.history);
+ if(offlineNote)offlineNote.hidden=!offline;
+}
 
 async function load(){
  const now=kyiv();let base=new Date(mon(now).getTime()+(wd(now)>4?7*D:0)+off*7*D);
@@ -267,16 +285,14 @@ function airMap(){return `<section class="map-card"><header class="map-card-head
 function alr(){
  const a=st.alert,m=since(a),ago=a.last_ok?Math.floor((Date.now()-Date.parse(a.last_ok))/1e3):null;
  let h=`<div class="top"><div><h1>Тривоги</h1><small>${esc(a.region)}</small></div></div>`;
- if(offline)h+=`<div class="box sm">Немає зв'язку з ботом. Дані можуть бути застарілими.</div>`;
- h+=`<div class="al ${a.active?cls(a):""}"><div class="k">${a.active?"Повітряна тривога":"Зараз"}</div><div class="t">${a.active?lvl(a):"Тривоги немає"}</div><div class="k">${a.active?(m!==null?"Триває "+(m<1?"менше хвилини":fm(m)):"Триває"):"Можна не поспішати в укриття"}</div></div>`;
- h+=`<div class="sm" style="margin:0 2px 12px">${ago===null?"Ще не було перевірки":"Перевірено "+(ago<60?ago+" с":Math.floor(ago/60)+" хв")+" тому"}</div>`;
- h+=`<div class="st"><div class="box"><span class="sm">Сьогодні тривог</span><b>${a.today.count}</b></div><div class="box"><span class="sm">Загалом</span><b>${a.today.minutes} хв</b></div></div>`;
+ h+=`<div id="alert-offline" class="box sm" ${offline?"":"hidden"}>Немає зв'язку з ботом. Дані можуть бути застарілими.</div>`;
+ h+=`<div id="alert-status" class="al ${a.active?cls(a):""}"><div class="k">${a.active?"Повітряна тривога":"Зараз"}</div><div class="t">${a.active?lvl(a):"Тривоги немає"}</div><div class="k">${a.active?(m!==null?"Триває "+(m<1?"менше хвилини":fm(m)):"Триває"):"Можна не поспішати в укриття"}</div></div>`;
+ h+=`<div id="alert-checked" class="sm" style="margin:0 2px 12px">${ago===null?"Ще не було перевірки":"Перевірено "+(ago<60?ago+" с":Math.floor(ago/60)+" хв")+" тому"}</div>`;
+ h+=`<div id="alert-stats" class="st"><div class="box"><span class="sm">Сьогодні тривог</span><b>${a.today.count}</b></div><div class="box"><span class="sm">Загалом</span><b>${a.today.minutes} хв</b></div></div>`;
  h+=`<h2>Історія</h2>`;
- if(!a.history.length)h+=`<div class="empty">Поки що записів немає. Бот почав вести журнал з моменту оновлення.</div>`;
+ h+=`<div id="alert-history-empty" class="empty" ${a.history.length?"hidden":""}>Поки що записів немає. Бот почав вести журнал з моменту оновлення.</div>`;
  h+=airMap();
- const t=iso(kyiv()),y=iso(new Date(U(t)-D));
- h+=a.history.map(x=>{const s=x.start,d=s.slice(0,10),e=x.end,dur=Math.max(0,Math.round(((e?Date.parse(e):Date.now())-Date.parse(s))/6e4));
-  return `<div class="box hl"><div><b><i class="dot ${x.level==="red"?"red":""}"></i>${d===t?"Сьогодні":d===y?"Вчора":fd(d)}, ${s.slice(11,16)} – ${e?e.slice(11,16):"триває"}</b><span class="sm">${x.level==="red"?"Червоний":x.level==="yellow"?"Жовтий":"Рівень невідомий"} рівень</span></div><div class="sm">${fm(dur)||"<1 хв"}</div></div>`}).join("");
+ h+=`<div id="alert-history-list">${alertHistoryRows(a.history)}</div>`;
  return h}
 function activityBlock(){
  const pageNames={sch:"Розклад",dut:"Чергові",al:"Тривоги",adm:"Керування"};
@@ -408,7 +424,7 @@ $("app").onchange=async e=>{if(e.target.id==="ad"&&e.target.value){adminDate=e.t
  if(e.target.id==="mute")act(()=>post("/api/admin/settings",{key:"alerts_muted",value:!e.target.checked}),e.target.checked?"Сповіщення увімкнено":"Сповіщення вимкнено")};
 async function boot(){await load();if(!st.err)await loadAdmin();await pingActivity();render()}
 boot();
-setInterval(async()=>{if($("sheet").classList.contains("on")||tab==="adm")return;await load();if(tab==="dut")await loadDutySchedule();render()},15000);
+setInterval(async()=>{if($("sheet").classList.contains("on")||tab==="adm")return;await load();if(tab==="dut")await loadDutySchedule();if(tab==="al")refreshAlertPage();else render()},15000);
 setInterval(async()=>{await pingActivity();if(tab!=="adm"||$("sheet").classList.contains("on"))return;await loadActivity();const section=$("activity-section");if(section){const wasOpen=section.open,holder=document.createElement("div");holder.innerHTML=activityBlock();const updated=holder.querySelector("#activity-section");if(updated){updated.open=wasOpen;section.replaceWith(updated)}}},15000);
 </script>
 
