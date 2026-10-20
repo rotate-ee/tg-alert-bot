@@ -16,6 +16,7 @@ import aiohttp
 import api
 from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
@@ -27,6 +28,7 @@ from aiogram.types import (
 )
 
 import bell_overrides
+import alert_notifications
 import cancellations
 import config
 import early_end
@@ -805,20 +807,27 @@ def _in_notify_window(now: datetime) -> bool:
     return start_t <= now_t <= end_t
 
 
-async def _try_delete(chat_id: int | str, message_id: int | None):
-    if message_id is None:
-        return
-    try:
-        await bot.delete_message(chat_id, message_id)
-    except Exception as e:
-        log.warning("Не вдалося видалити старе повідомлення про тривогу: %s", e)
+async def _flush_alert_message_deletions():
+    """Retry old status-message deletions until Telegram confirms them."""
+    for message_id in alert_notifications.pending_deletions():
+        try:
+            deleted = await bot.delete_message(config.CHAT_ID, message_id)
+        except TelegramBadRequest as e:
+            error = str(e).lower()
+            if "message to delete not found" not in error:
+                log.warning("Telegram відхилив видалення повідомлення про тривогу %s: %s", message_id, e)
+            # Either it's already gone or Telegram says it cannot be deleted.
+            alert_notifications.mark_deleted(message_id)
+        except Exception as e:
+            log.warning("Не вдалося видалити старе повідомлення про тривогу %s; повторю спробу: %s", message_id, e)
+        else:
+            if deleted:
+                alert_notifications.mark_deleted(message_id)
+            else:
+                log.warning("Telegram не подтвердил удаление сообщения про тривогу %s; повторю попытку", message_id)
 
 
 async def watch_alerts():
-    # id останнього повідомлення "🔴 тривога почалась" і "🟢 відбій" -
-    # у чаті лишається тільки одне, найсвіжіше повідомлення про статус.
-    last_start_message_id: int | None = None
-    last_ended_message_id: int | None = None
     pending_notifications: list[tuple[str, str | None]] = []
 
     async with aiohttp.ClientSession() as session:
@@ -860,10 +869,7 @@ async def watch_alerts():
                     if event == "ended":
                         text = format_status_message("🟢 Відбій повітряної тривоги")
                         sent = await bot.send_message(config.CHAT_ID, text, parse_mode=ParseMode.HTML)
-                        old_message_id = last_start_message_id
-                        last_start_message_id = None
-                        last_ended_message_id = sent.message_id
-                        await _try_delete(config.CHAT_ID, old_message_id)
+                        alert_notifications.replace_active(sent.message_id)
                         log.info("Відбій тривоги надіслано в чат")
                     elif event == "started":
                         emoji, label = _level_emoji_and_label(level)
@@ -872,10 +878,7 @@ async def watch_alerts():
                             f"{emoji} <b>Тривога · {escape(config.REGION_TITLE)}</b>\n{escape(label)}",
                             parse_mode=ParseMode.HTML,
                         )
-                        old_message_id = last_ended_message_id
-                        last_ended_message_id = None
-                        last_start_message_id = sent.message_id
-                        await _try_delete(config.CHAT_ID, old_message_id)
+                        alert_notifications.replace_active(sent.message_id)
                         log.info("Тривогу надіслано в чат (рівень: %s)", level)
                     else:
                         emoji, label = _level_emoji_and_label(level)
@@ -884,9 +887,7 @@ async def watch_alerts():
                             f"⚠️ <b>Рівень змінився</b>\n{emoji} {escape(label)} · {escape(config.REGION_TITLE)}",
                             parse_mode=ParseMode.HTML,
                         )
-                        old_message_id = last_start_message_id
-                        last_start_message_id = sent.message_id
-                        await _try_delete(config.CHAT_ID, old_message_id)
+                        alert_notifications.replace_active(sent.message_id)
                         log.info("Оновлений рівень тривоги надіслано в чат: %s", level)
                     pending_notifications.pop(0)
                 except asyncio.CancelledError:
@@ -894,6 +895,7 @@ async def watch_alerts():
                 except Exception:
                     log.exception("Не вдалося надіслати сповіщення про тривогу; повторю спробу")
 
+            await _flush_alert_message_deletions()
             await asyncio.sleep(config.POLL_INTERVAL_SECONDS)
 
 
