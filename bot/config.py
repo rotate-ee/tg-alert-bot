@@ -24,7 +24,7 @@ REGION_TITLE = os.getenv("REGION_TITLE", "Миколаївська област�
 
 # Как часто опрашивать API тревог, секунд.
 # alerts.in.ua просит не чаще 1 запроса в 5-10 сек на бесплатном токене.
-POLL_INTERVAL_SECONDS = int(os.getenv("POLL_INTERVAL_SECONDS", "15"))
+POLL_INTERVAL_SECONDS = max(7, int(os.getenv("POLL_INTERVAL_SECONDS", "15")))  # API: жорсткий ліміт 12 запитів/хв, нижче 7 с - ризик бану токена
 
 # Отправлять ли сообщение и при НАЧАЛЕ тревоги (не только при отбое)
 NOTIFY_ON_START = os.getenv("NOTIFY_ON_START", "true").lower() == "true"
@@ -87,3 +87,15 @@ WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip().rstrip("/")
 WEBAPP_PORT = int(os.getenv("PORT") or os.getenv("WEBAPP_PORT") or "8080")
 # Пускати в застосунок тільки учасників CHAT_ID (адміни - завжди).
 WEBAPP_REQUIRE_MEMBERSHIP = os.getenv("WEBAPP_REQUIRE_MEMBERSHIP", "true").strip().lower() == "true"
+
+
+# ---- Які тривоги вважати "нашими" ----
+# Тривога на ВСЮ область теж стосується району, тому її теж ловимо.
+# Порожньо - вимкнути (тоді тільки точний збіг REGION_TITLE).
+REGION_PARENT_TITLE = os.getenv("REGION_PARENT_TITLE", "Миколаївська область").strip()
+# Додаткові громади/міста через кому, тривога в яких теж "наша" (необов'язково).
+REGION_EXTRA_TITLES = [x.strip() for x in os.getenv("REGION_EXTRA_TITLES", "").split(",") if x.strip()]
+# Області, тривоги в яких показуємо в розділі "Поруч" у Mini App.
+NEARBY_OBLASTS = [x.strip() for x in os.getenv(
+    "NEARBY_OBLASTS", "Херсонська область,Одеська область,Кіровоградська область,Дніпропетровська область"
+).split(",") if x.strip()]

@@ -7,21 +7,34 @@ Telegram-бот: знает расписание уроков класса и п
 """
 import asyncio
 import logging
+import os
+import time as _time
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import aiohttp
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    MenuButtonWebApp,
+    Message,
+    WebAppInfo,
+)
 
+import alert_history
 import bell_overrides
 import cancellations
 import config
 import early_end
 import extra_lessons
+import holidays
 import remote_overrides
+import settings
 from alerts import AlertWatcher
+from webapp import WebAppDeps, create_app, start_server
 from lessons import (
     find_current_and_next,
     format_day_schedule_message,
@@ -43,7 +56,13 @@ KYIV_TZ = ZoneInfo("Europe/Kyiv")
 bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher()
 
-alert_watcher = AlertWatcher(token=config.ALERTS_TOKEN, region_title=config.REGION_TITLE)
+alert_watcher = AlertWatcher(
+    token=config.ALERTS_TOKEN,
+    region_title=config.REGION_TITLE,
+    parent_title=config.REGION_PARENT_TITLE,
+    extra_titles=config.REGION_EXTRA_TITLES,
+    nearby_oblasts=config.NEARBY_OBLASTS,
+)
 
 
 # ---------- команды для ручной проверки в чате ----------
@@ -56,6 +75,12 @@ async def cmd_now(message: Message):
 
 @dp.message(Command("today"))
 async def cmd_today(message: Message):
+    today = datetime.now(KYIV_TZ).date()
+    hol = holidays.holiday_on(today)
+    if hol:
+        end = date.fromisoformat(hol["end"])
+        await message.answer(f"🏖 {hol['name']} - до {end.strftime('%d.%m')} включно. Уроків немає.")
+        return
     text = format_day_schedule_message("📅 Розклад на сьогодні")
     if text is None:
         text = "Сьогодні уроків немає (вихідний)."
@@ -78,6 +103,7 @@ async def cmd_help(message: Message):
         "/now — показати поточний/наступний урок прямо зараз\n"
         "/today — повний розклад на сьогодні\n"
         "/week — розклад на весь тиждень"
+        + ("\n/app — відкрити застосунок (розклад, тривоги)" if config.WEBAPP_URL else "")
     )
     if message.chat.type == "private" and message.from_user.id in config.ADMIN_IDS:
         text += (
@@ -93,9 +119,24 @@ async def cmd_help(message: Message):
             "/removelesson <номер> [дата] — прибрати доданий урок\n"
             "/announce <текст> — надіслати оголошення в груповий чат\n"
             "/endnow [номер] — позначити, що урок закінчився саме зараз\n"
-            "/undoend <номер> [дата] — прибрати позначку дострокового завершення"
+            "/undoend <номер> [дата] — прибрати позначку дострокового завершення\n"
+            "/holiday add <від> <до> <назва> | list | remove <від> — канікули"
         )
     await message.answer(text)
+
+
+@dp.message(Command("app"))
+async def cmd_app(message: Message):
+    if not config.WEBAPP_URL:
+        await message.answer("Застосунок ще не налаштовано (потрібна змінна WEBAPP_URL).")
+        return
+    if message.chat.type != "private":
+        await message.answer("Відкрийте бота в особистих повідомленнях і напишіть /app")
+        return
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="📅 Відкрити розклад", web_app=WebAppInfo(url=config.WEBAPP_URL))
+    ]])
+    await message.answer("Розклад, тривоги та адмін-панель:", reply_markup=kb)
 
 
 # ---------- команды отмены уроков (только в ЛС, только для админов) ----------
@@ -195,6 +236,55 @@ async def cmd_cancelled(message: Message):
         name = lesson["name"] if lesson else "?"
         lines.append(f"{n}-й «{name}»")
     await message.answer(f"Скасовано на {target_date.isoformat()}:\n" + "\n".join(lines))
+
+
+@dp.message(Command("holiday"))
+async def cmd_holiday(message: Message):
+    if not _is_allowed(message):
+        return
+    rest = message.text.split(maxsplit=1)[1:]
+    args = rest[0].split() if rest else []
+    sub = args[0].lower() if args else "list"
+
+    if sub == "list":
+        items = holidays.upcoming(datetime.now(KYIV_TZ).date())
+        if not items:
+            await message.answer("Канікул не заплановано. Додати: /holiday add 2026-10-26 2026-11-01 Осінні канікули")
+            return
+        def line(h):
+            tail = {"home": " → потім дистанційно", "school": " → потім очно"}.get(h.get("after"), "")
+            if tail and int(h.get("after_weeks") or 1) > 1:
+                tail += f" ({h['after_weeks']} тиж.)"
+            return f"{h['start']} – {h['end']}: {h['name']}{tail}"
+        await message.answer("🏖 Канікули:\n" + "\n".join(line(h) for h in items))
+    elif sub == "add" and len(args) >= 3:
+        start, end = _parse_date_arg(args[1]), _parse_date_arg(args[2])
+        if start is None or end is None:
+            await message.answer("Дати мають бути у форматі РРРР-ММ-ДД")
+            return
+        tail_args, after = args[3:], None
+        if tail_args and tail_args[0].lower() in ("дистанційно", "вдома", "home"):
+            after, tail_args = "home", tail_args[1:]
+        elif tail_args and tail_args[0].lower() in ("очно", "школа", "school"):
+            after, tail_args = "school", tail_args[1:]
+        try:
+            holidays.add(start, end, " ".join(tail_args), after)
+        except ValueError as e:
+            await message.answer(str(e))
+            return
+        await message.answer(f"✅ Додано канікули {start.isoformat()} – {end.isoformat()}")
+    elif sub == "remove" and len(args) >= 2:
+        start = _parse_date_arg(args[1])
+        if start is None:
+            await message.answer("Дата має бути у форматі РРРР-ММ-ДД")
+            return
+        ok = holidays.remove(start)
+        await message.answer("🗑 Канікули прибрано" if ok else "Таких канікул немає (вкажіть дату початку)")
+    else:
+        await message.answer(
+            "Використання:\n/holiday add <від> <до> [дистанційно|очно] <назва>\n"
+            "(слово після дат - яким буде тиждень ПІСЛЯ канікул)\n/holiday list\n/holiday remove <дата початку>"
+        )
 
 
 @dp.message(Command("diag"))
@@ -536,43 +626,9 @@ async def cb_in_person(callback: CallbackQuery):
         await callback.answer()
 
 
-# ---------- фоновая задача: ранкова розсилка розкладу ----------
-
-def _parse_digest_time() -> tuple[int, int] | None:
-    raw = config.MORNING_DIGEST_TIME
-    if not raw or raw.lower() == "off":
-        return None
-    try:
-        h, m = map(int, raw.split(":"))
-        return h, m
-    except ValueError:
-        log.warning("Некоректний MORNING_DIGEST_TIME=%r, розсилку вимкнено", raw)
-        return None
-
-
-async def morning_digest():
-    parsed = _parse_digest_time()
-    if parsed is None:
-        log.info("Ранкова розсилка вимкнена (MORNING_DIGEST_TIME=%r)", config.MORNING_DIGEST_TIME)
-        return
-
-    hour, minute = parsed
-    while True:
-        now = datetime.now(KYIV_TZ)
-        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        if target <= now:
-            target += timedelta(days=1)
-        await asyncio.sleep((target - now).total_seconds())
-
-        text = format_day_schedule_message("📅 Розклад на сьогодні")
-        if text is not None:
-            log.info("Відправляю ранковий розклад")
-            await bot.send_message(config.CHAT_ID, text)
-        else:
-            log.info("Сьогодні уроків немає (вихідний) - ранкову розсилку пропускаю")
-
-
-# ---------- фоновая задача: нагадування за N хвилин до уроку ----------
+# ---------- планувальник: розсилки, нагадування, питання ----------
+# Усе читає налаштування з settings при кожному проході, тому зміни з
+# адмін-панелі діють одразу, без перезапуску.
 
 async def _delete_message_later(chat_id: int | str, message_id: int, when: datetime):
     """Чекає до моменту `when` і видаляє повідомлення (нагадування) з чату."""
@@ -581,145 +637,98 @@ async def _delete_message_later(chat_id: int | str, message_id: int, when: datet
         await asyncio.sleep(delay)
     try:
         await bot.delete_message(chat_id, message_id)
-        log.info("Видалив нагадування (message_id=%s) - урок почався", message_id)
     except Exception as e:
         log.warning("Не вдалося видалити нагадування message_id=%s: %s", message_id, e)
 
 
-async def lesson_reminders():
-    if config.LESSON_REMINDER_MINUTES is None:
-        log.info("Нагадування про уроки вимкнені (LESSON_REMINDER_MINUTES=off)")
+def _due(now: datetime, hhmm: str | None, window: int = 300) -> bool:
+    """Чи настав час hhmm сьогодні (і не минуло більше window секунд - щоб після рестарту не слати запізно)."""
+    if not hhmm:
+        return False
+    h, m = map(int, hhmm.split(":"))
+    target = now.replace(hour=h, minute=m, second=0, microsecond=0)
+    return 0 <= (now - target).total_seconds() < window
+
+
+async def _tick_morning(now: datetime, fired: dict):
+    if _due(now, settings.get("morning_digest_time")) and fired.get("morning") != now.date():
+        fired["morning"] = now.date()
+        text = format_day_schedule_message("📅 Розклад на сьогодні", now)
+        if text is not None:  # у вихідні та канікули уроків немає - не шлемо
+            await bot.send_message(config.CHAT_ID, text)
+
+
+async def _tick_remote_confirm(now: datetime, fired: dict):
+    if not (_due(now, settings.get("remote_confirm_time")) and fired.get("remote") != now.date()):
         return
-
-    minutes_before = config.LESSON_REMINDER_MINUTES
-
-    while True:
-        now = datetime.now(KYIV_TZ)
-        today = now.date()
-        pending = []
-        for lesson in get_today_lessons(now):
-            if lesson["cancelled"]:
-                continue
-            start_dt = lesson_start_datetime(lesson, today)
-            if start_dt is None:
-                continue
-            reminder_dt = start_dt - timedelta(minutes=minutes_before)
-            if reminder_dt > now:
-                pending.append((reminder_dt, lesson, start_dt))
-
-        if not pending:
-            # на сьогодні нагадувати більше нічого - спимо до завтрашнього ранку
-            tomorrow = datetime.combine(today + timedelta(days=1), time(0, 1), tzinfo=KYIV_TZ)
-            await asyncio.sleep((tomorrow - now).total_seconds())
+    fired["remote"] = now.date()
+    today = now.date()
+    if today.weekday() >= 5 or is_school_week(today) is False:
+        return
+    for number in (7, 8):
+        lesson = get_lesson_by_number(number, today)
+        if lesson is None or lesson["cancelled"] or remote_overrides.is_in_person(today, number):
             continue
-
-        pending.sort(key=lambda triple: triple[0])
-        reminder_dt, lesson, start_dt = pending[0]
-        await asyncio.sleep((reminder_dt - now).total_seconds())
-
-        # перевіряємо ще раз прямо перед відправкою - раптом урок щойно скасували
-        # або якраз зараз триває тривога (тоді нагадування не потрібне - є учні
-        # в укритті, після відбою бот сам напише, який урок зараз)
-        fresh = get_lesson_by_number(lesson["number"], today)
-        if alert_watcher.is_active:
-            log.info("Зараз триває тривога - нагадування про %s-й урок пропускаю", lesson["number"])
-        elif fresh and not fresh["cancelled"]:
-            text = (
-                f"⏰ За {minutes_before} хв: {fresh['number']}-й урок «{fresh['name']}», "
-                f"{format_lesson_time(fresh, today)}{format_lesson_room(fresh, today)}"
-            )
-            log.info("Надсилаю нагадування про %s-й урок", fresh["number"])
-            sent = await bot.send_message(config.CHAT_ID, text)
-            # видалимо це повідомлення, як тільки урок почнеться
-            asyncio.create_task(_delete_message_later(config.CHAT_ID, sent.message_id, start_dt))
-        else:
-            log.info("Урок %s скасовано, нагадування пропускаю", lesson["number"])
-        # цикл повториться і сам перерахує наступне найближче нагадування
+        await ask_in_person(lesson, today)
 
 
-# ---------- фоновая задача: неділя ввечері - тип наступного тижня ----------
-
-def _parse_hhmm(raw: str) -> tuple[int, int] | None:
-    if not raw or raw.lower() == "off":
-        return None
-    try:
-        h, m = map(int, raw.split(":"))
-        return h, m
-    except ValueError:
-        return None
-
-
-async def week_type_sunday_reminder():
-    parsed = _parse_hhmm(config.WEEK_TYPE_REMINDER_TIME)
-    if parsed is None:
-        log.info("Недільне нагадування про тип тижня вимкнене")
+async def _tick_weektype(now: datetime, fired: dict):
+    if now.weekday() != 6:
         return
-
-    hour, minute = parsed
-    while True:
-        now = datetime.now(KYIV_TZ)
-        days_until_sunday = (6 - now.weekday()) % 7
-        target = (now + timedelta(days=days_until_sunday)).replace(
-            hour=hour, minute=minute, second=0, microsecond=0
-        )
-        if target <= now:
-            target += timedelta(days=7)
-        await asyncio.sleep((target - now).total_seconds())
-
-        next_monday = target.date() + timedelta(days=1)
+    if not (_due(now, settings.get("weektype_time")) and fired.get("weektype") != now.date()):
+        return
+    fired["weektype"] = now.date()
+    next_monday = now.date() + timedelta(days=1)
+    span = f"{next_monday.strftime('%d.%m')} - {(next_monday + timedelta(days=4)).strftime('%d.%m')}"
+    hol = holidays.holiday_on(next_monday)
+    if hol:
+        text = f"{span} – 🏖 {hol['name']}"
+    else:
         school = is_school_week(next_monday)
         if school is None:
-            log.info("SCHOOL_WEEK_ANCHOR_MONDAY не налаштовано - недільне нагадування пропускаю")
-            continue
-
-        friday = next_monday + timedelta(days=4)
-        week_word = "у школі" if school else "вдома"
-        text = f"{next_monday.strftime('%d.%m')} - {friday.strftime('%d.%m')} – {week_word}"
-
-        log.info("Надсилаю недільне нагадування про тип тижня в чат")
-        await bot.send_message(config.CHAT_ID, text)
+            return
+        text = f"{span} – {'у школі' if school else 'вдома'}"
+    await bot.send_message(config.CHAT_ID, text)
 
 
-# ---------- фоновая задача: щоденне питання про 7/8 урок в очний день ----------
-
-def _parse_confirm_time() -> tuple[int, int] | None:
-    return _parse_hhmm(config.REMOTE_CONFIRM_TIME)
-
-
-async def remote_confirmation_daily():
-    parsed = _parse_confirm_time()
-    if parsed is None:
-        log.info("Щоденне питання про 7/8 урок вимкнене")
+async def _tick_reminders(now: datetime, fired: dict):
+    minutes = settings.get("reminder_minutes")
+    if not minutes:
         return
+    done = fired.setdefault("reminders", set())
+    today = now.date()
+    for lesson in get_today_lessons(now):
+        if lesson["cancelled"]:
+            continue
+        start_dt = lesson_start_datetime(lesson, today)
+        if start_dt is None:
+            continue
+        remind_at = start_dt - timedelta(minutes=minutes)
+        key = (today.isoformat(), lesson["number"], lesson["start"], minutes)
+        if key in done or not (remind_at <= now < remind_at + timedelta(seconds=60)):
+            continue
+        done.add(key)
+        if alert_watcher.is_active:  # під час тривоги нагадування не потрібне - після відбою бот сам напише урок
+            log.info("Триває тривога - нагадування про %s-й урок пропускаю", lesson["number"])
+            continue
+        text = (
+            f"⏰ За {minutes} хв: {lesson['number']}-й урок «{lesson['name']}», "
+            f"{format_lesson_time(lesson, today)}{format_lesson_room(lesson, today)}"
+        )
+        sent = await bot.send_message(config.CHAT_ID, text)
+        asyncio.create_task(_delete_message_later(config.CHAT_ID, sent.message_id, start_dt))
 
-    hour, minute = parsed
+
+async def scheduler_loop():
+    fired: dict = {}
     while True:
         now = datetime.now(KYIV_TZ)
-        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        if target <= now:
-            target += timedelta(days=1)
-        await asyncio.sleep((target - now).total_seconds())
-
-        today = target.date()
-        if today.weekday() >= 5:
-            log.info("Вихідний - питання про 7/8 урок не потрібне")
-            continue
-
-        school = is_school_week(today)
-        if school is False:
-            log.info("Тиждень вдома - питання про 7/8 урок не потрібне")
-            continue
-
-        for number in (7, 8):
-            lesson = get_lesson_by_number(number, today)
-            if lesson is None:
-                continue  # такого уроку сьогодні немає за розкладом
-            if lesson["cancelled"]:
-                continue
-            if remote_overrides.is_in_person(today, number):
-                continue  # вже підтверджено раніше
-            log.info("Питаю адмінів про %s-й урок сьогодні", number)
-            await ask_in_person(lesson, today)
+        for tick in (_tick_morning, _tick_remote_confirm, _tick_weektype, _tick_reminders):
+            try:
+                await tick(now, fired)
+            except Exception:
+                log.exception("Збій планувальника (%s)", tick.__name__)
+        await asyncio.sleep(15)
 
 
 # ---------- фоновая задача: опрос статуса тревоги ----------
@@ -759,66 +768,90 @@ async def _try_delete(chat_id: int | str, message_id: int | None):
         log.warning("Не вдалося видалити старе повідомлення про тривогу: %s", e)
 
 
+OUTAGE_AFTER_SECONDS = 300  # скільки хвилин без даних, перш ніж написати адмінам
+
+
+def _threats_line(threats: list[dict]) -> str:
+    if not threats or not settings.get("show_threats"):
+        return ""
+    return "\nЗагрози: " + ", ".join(t["label"] for t in threats)
+
+
+async def _dm_admins(text: str):
+    for admin_id in config.ADMIN_IDS:
+        try:
+            await bot.send_message(admin_id, text)
+        except Exception as e:
+            log.warning("Не вдалося надіслати ЛС адміну %s: %s", admin_id, e)
+
+
 async def watch_alerts():
-    # id останнього повідомлення "🔴 тривога почалась" і "🟢 відбій" -
+    # id останнього повідомлення "🔴 тривога" і "🟢 відбій" -
     # у чаті лишається тільки одне, найсвіжіше повідомлення про статус.
     last_start_message_id: int | None = None
     last_ended_message_id: int | None = None
+    boot = _time.monotonic()
+    outage_notified = False
 
     async with aiohttp.ClientSession() as session:
         while True:
             event = await alert_watcher.poll_once(session)
             now = datetime.now(KYIV_TZ)
+
+            try:  # історія для статистики (самовідновлюється після рестартів)
+                alert_history.sync(alert_watcher.is_active, alert_watcher.level, now)
+            except Exception:
+                log.exception("Не вдалося записати історію тривог")
+
+            # сигнал адмінам, якщо дані про тривоги не надходять (токен, ліміт, мережа)
+            age = alert_watcher.data_age_seconds()
+            down_for = age if age is not None else int(_time.monotonic() - boot)
+            if alert_watcher.last_error and down_for >= OUTAGE_AFTER_SECONDS and not outage_notified:
+                outage_notified = True
+                await _dm_admins(
+                    f"⚠️ Немає даних про тривоги вже {down_for // 60} хв.\n"
+                    f"Причина: {alert_watcher.last_error}\n"
+                    "Бот може не повідомити про тривогу - стежте за іншими джерелами."
+                )
+            elif outage_notified and not alert_watcher.last_error:
+                outage_notified = False
+                await _dm_admins("✅ Дані про тривоги знову надходять.")
+
             is_weekend = now.weekday() >= 5  # 5=субота, 6=неділя
             should_notify = (
                 (config.NOTIFY_ALERTS_ON_WEEKENDS or not is_weekend) and _in_notify_window(now)
             )
 
             if event == "ended":
-                if should_notify:
+                if should_notify and settings.get("notify_ended"):
                     # старе повідомлення "тривога почалась" більше не актуальне
                     await _try_delete(config.CHAT_ID, last_start_message_id)
                     last_start_message_id = None
-
                     text = format_status_message("🟢 Відбій тривоги")
-                    log.info("Отбой тревоги, отправляю сообщение")
                     sent = await bot.send_message(config.CHAT_ID, text)
                     last_ended_message_id = sent.message_id
                 else:
-                    log.info("Отбой тревоги у вихідний - сповіщення пропускаю")
+                    log.info("Відбій тривоги - сповіщення вимкнене/поза розкладом, пропускаю")
 
-            elif event == "started" and config.NOTIFY_ON_START:
-                if should_notify:
-                    # старе повідомлення "відбій" з минулого разу теж вже не актуальне
+            elif event in ("started", "level_changed"):
+                if should_notify and settings.get("notify_start"):
+                    # старі повідомлення ("відбій" з минулого разу, попередній рівень) вже не актуальні
                     await _try_delete(config.CHAT_ID, last_ended_message_id)
                     last_ended_message_id = None
+                    if event == "level_changed":
+                        await _try_delete(config.CHAT_ID, last_start_message_id)
 
                     emoji, label = _level_emoji_and_label(alert_watcher.level)
-                    log.info("Тревога началась (рівень: %s), отправляю уведомление", alert_watcher.level)
+                    head = "⚠️ Рівень тривоги змінено:\n" if event == "level_changed" else ""
                     sent = await bot.send_message(
                         config.CHAT_ID,
-                        f"{emoji} {label}\n«{config.REGION_TITLE}»",
+                        f"{head}{emoji} {label}\n«{config.REGION_TITLE}»{_threats_line(alert_watcher.threats)}",
                     )
                     last_start_message_id = sent.message_id
                 else:
-                    log.info("Тривога почалась у вихідний - сповіщення пропускаю")
+                    log.info("Початок/зміна рівня тривоги - сповіщення вимкнене/поза розкладом, пропускаю")
 
-            elif event == "level_changed" and config.NOTIFY_ON_START:
-                if should_notify:
-                    # рівень тривоги змінився - оновлюємо повідомлення на найсвіжіше
-                    await _try_delete(config.CHAT_ID, last_start_message_id)
-
-                    emoji, label = _level_emoji_and_label(alert_watcher.level)
-                    log.info("Рівень тривоги змінився на %s, оновлюю повідомлення", alert_watcher.level)
-                    sent = await bot.send_message(
-                        config.CHAT_ID,
-                        f"⚠️ Рівень тривоги змінено:\n{emoji} {label}\n«{config.REGION_TITLE}»",
-                    )
-                    last_start_message_id = sent.message_id
-                else:
-                    log.info("Рівень тривоги змінився у вихідний - сповіщення пропускаю")
-
-            if event == "started":
+            if event == "started" and settings.get("ask_dismiss"):
                 current, _, _, _ = find_current_and_next(datetime.now(KYIV_TZ))
                 if current is not None:
                     log.info("Питаю адмінів, чи відпустили з %s-го уроку", current["number"])
@@ -829,12 +862,34 @@ async def watch_alerts():
 
 async def main():
     asyncio.create_task(watch_alerts())
-    asyncio.create_task(morning_digest())
-    asyncio.create_task(lesson_reminders())
-    asyncio.create_task(week_type_sunday_reminder())
-    asyncio.create_task(remote_confirmation_daily())
-    log.info("Бот запущен, слежу за регионом: %s", config.REGION_TITLE)
-    await dp.start_polling(bot)
+    asyncio.create_task(scheduler_loop())
+
+    runner = None
+    if config.WEBAPP_URL:
+        deps = WebAppDeps(
+            bot_token=config.BOT_TOKEN,
+            chat_id=config.CHAT_ID,
+            admin_ids=set(config.ADMIN_IDS),
+            bot=bot,
+            alert_state_fn=alert_watcher.snapshot,
+            region_title=config.REGION_TITLE,
+            require_membership=config.WEBAPP_REQUIRE_MEMBERSHIP,
+            version=(os.getenv("RAILWAY_GIT_COMMIT_SHA") or os.getenv("APP_VERSION") or "dev")[:7],
+        )
+        runner = await start_server(create_app(deps), "0.0.0.0", config.WEBAPP_PORT)
+        try:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(text="Розклад", web_app=WebAppInfo(url=config.WEBAPP_URL))
+            )
+        except Exception as e:
+            log.warning("Не вдалося встановити кнопку меню Mini App: %s", e)
+
+    log.info("Бот запущен, слежу за регионом: %s (Mini App: %s)", config.REGION_TITLE, config.WEBAPP_URL or "вимкнено")
+    try:
+        await dp.start_polling(bot)
+    finally:
+        if runner:
+            await runner.cleanup()
 
 
 if __name__ == "__main__":

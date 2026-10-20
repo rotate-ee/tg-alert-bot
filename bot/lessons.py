@@ -13,7 +13,9 @@ import cancellations
 import config
 import early_end
 import extra_lessons
+import holidays
 import remote_overrides
+import settings
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 SCHEDULE_PATH = Path(__file__).parent / "schedule.json"
@@ -100,7 +102,7 @@ def week_group(now: datetime) -> str:
 
 
 def _school_week_anchor_monday() -> date | None:
-    raw = getattr(config, "SCHOOL_WEEK_ANCHOR_MONDAY", "").strip()
+    raw = str(settings.get("school_week_anchor") or "").strip()
     if not raw:
         return None
     try:
@@ -110,6 +112,31 @@ def _school_week_anchor_monday() -> date | None:
     return d - timedelta(days=d.weekday())  # на всяк випадок приводимо до понеділка
 
 
+def _after_holiday_type(monday: date) -> bool | None:
+    """
+    Якщо цей тиждень - перший або наступні після канікул з полем "after",
+    повертає True (очно) / False (вдома); інакше None (діє звичайне чергування).
+    Після after_weeks тижнів заданого типу чергування продовжується з протилежного.
+    """
+    best_start, best = None, None
+    for h in holidays.list_all():
+        mode = h.get("after")
+        if mode not in ("home", "school"):
+            continue
+        resume = date.fromisoformat(h["end"]) + timedelta(days=1)
+        first_monday = resume - timedelta(days=resume.weekday())  # тиждень, у якому школа знову починається
+        if first_monday <= monday and (best_start is None or first_monday > best_start):
+            best_start, best = first_monday, h
+    if best is None:
+        return None
+    k = (monday - best_start).days // 7
+    n = int(best.get("after_weeks") or 1)
+    after_is_school = best["after"] == "school"
+    if k < n:
+        return after_is_school
+    return (not after_is_school) if (k - n) % 2 == 0 else after_is_school
+
+
 def is_school_week(d: date) -> bool | None:
     """
     True - очний тиждень (в школі), False - тиждень вдома (дистанційно),
@@ -117,10 +144,13 @@ def is_school_week(d: date) -> bool | None:
     Рахується від опорного понеділка: парна різниця тижнів - той самий
     тип, що й опорний (школа), непарна - протилежний (вдома).
     """
+    monday = d - timedelta(days=d.weekday())
+    after = _after_holiday_type(monday)
+    if after is not None:  # тиждень(і) після канікул мають свій тип, далі чергування продовжується
+        return after
     anchor = _school_week_anchor_monday()
     if anchor is None:
         return None
-    monday = d - timedelta(days=d.weekday())
     weeks_diff = (monday - anchor).days // 7
     return weeks_diff % 2 == 0
 
@@ -179,6 +209,8 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
     if now is None:
         now = datetime.now(KYIV_TZ)
     today = now.date()
+    if holidays.holiday_on(today):
+        return []  # канікули: уроків немає, тож розсилки/нагадування самі "мовчать"
     schedule = load_schedule()
     group = week_group(now)
     day_entries = schedule["days"].get(now.weekday(), [])
@@ -280,12 +312,16 @@ def format_week_message(now: datetime | None = None) -> str:
     for offset in range(7):
         d = monday + timedelta(days=offset)
         lessons = get_lessons_for_date(d)
-        if not lessons:
+        hol = holidays.holiday_on(d)
+        if not lessons and not (hol and d.weekday() < 5):
             continue
 
         day_name = _DAY_NAMES[d.weekday()]
         is_today = d == now.date()
         header = f"📌 {day_name}, {d.strftime('%d.%m')}" + (" (сьогодні)" if is_today else "")
+        if hol:
+            blocks.append("\n".join([header, "─" * 22, f"🏖 {hol['name']}"]))
+            continue
 
         lines = [header, "─" * 22]
         for lesson in lessons:
@@ -356,6 +392,11 @@ def format_status_message(prefix: str, now: datetime | None = None) -> str:
         now = datetime.now(KYIV_TZ)
 
     current, upcoming, remote_no_time_today, cancelled_today = find_current_and_next(now)
+
+    hol = holidays.holiday_on(now.date())
+    if hol:
+        end = date.fromisoformat(hol["end"])
+        return f"{prefix}\n\n🏖 {hol['name']} - до {end.strftime('%d.%m')} включно. Уроків немає."
 
     if current:
         body = (

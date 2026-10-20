@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -26,11 +27,14 @@ from typing import Any, Callable
 from aiohttp import web
 
 import alert_history
+import alert_impact
 import bell_overrides
 import cancellations
 import early_end
 import extra_lessons
+import holidays
 import remote_overrides
+import settings
 from lessons import (
     KYIV_TZ,
     find_current_and_next,
@@ -56,12 +60,14 @@ class WebAppDeps:
     chat_id: int | str
     admin_ids: set[int]
     bot: Any  # потрібні send_message() і get_chat_member() (в тестах - заглушка)
-    alert_state_fn: Callable[[], tuple[bool, str | None]]
+    alert_state_fn: Callable[[], dict]  # AlertWatcher.snapshot()
     now_fn: Callable[[], datetime] = lambda: datetime.now(KYIV_TZ)
     region_title: str = ""
     require_membership: bool = True
     auth_fn: Callable[[str], dict | None] | None = None  # для демо-режиму; у бойовому - None
     member_cache_ttl: int = 300
+    started_at: float = field(default_factory=time.time)
+    version: str = "dev"
     _member_cache: dict = field(default_factory=dict)
 
 
@@ -211,6 +217,7 @@ def _day_payload(d: date) -> dict:
         })
     return {
         "date": d.isoformat(),
+        "holiday": holidays.holiday_on(d),
         "weekday": d.weekday(),
         "weekday_name": WEEKDAYS[d.weekday()],
         "week_type": None if school is None else ("school" if school else "home"),
@@ -230,23 +237,57 @@ async def state_handler(request: web.Request) -> web.Response:
         start = today - timedelta(days=today.weekday() + 7)
         days = 21
 
-    active, level = deps.alert_state_fn()
-    return _json({
+    snap = deps.alert_state_fn() or {}
+    active = bool(snap.get("active"))
+    payload = {
         "now": now.isoformat(),
         "now_secs": now.hour * 3600 + now.minute * 60 + now.second,
         "today": today.isoformat(),
         "is_admin": request["is_admin"],
         "user": {"id": request["user"]["id"], "first_name": request["user"].get("first_name")},
         "region": deps.region_title,
-        "alert": {"active": bool(active), "level": level if active else None,
-                  "since": alert_history.open_since() if active else None},
+        "alert": {
+            "active": active,
+            "level": snap.get("level") if active else None,
+            "threats": snap.get("threats", []) if active else [],
+            "notes": snap.get("notes") if active else None,
+            "since": alert_history.open_since() if active else None,
+            "last_ended": _last_ended(),
+            "data_age_seconds": snap.get("data_age_seconds"),
+            "stale": bool(snap.get("stale", False)),
+            "last_error": snap.get("last_error"),
+            "nearby": snap.get("nearby", []),
+        },
+        "holidays": holidays.upcoming(today),
         "days": [_day_payload(start + timedelta(days=i)) for i in range(days)],
-    })
+    }
+    if request["is_admin"]:
+        payload["settings"] = settings.all()
+    return _json(payload)
+
+
+def _last_ended() -> dict | None:
+    for sess in reversed(alert_history.sessions()):
+        if sess["end"]:
+            return {"start": sess["start"].isoformat(), "end": sess["end"].isoformat(), "level": sess["level"],
+                    "duration_seconds": int((sess["end"] - sess["start"]).total_seconds())}
+    return None
 
 
 async def stats_handler(request: web.Request) -> web.Response:
     deps: WebAppDeps = request.app[DEPS]
-    return _json(alert_history.stats(deps.now_fn()))
+    now = deps.now_fn()
+    st = alert_history.stats(now)
+    sess = alert_history.sessions()
+    week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    st["week"].update(alert_impact.window_impact(sess, week_start, now))
+    st["month"].update(alert_impact.window_impact(sess, month_start, now))
+    for item, sobj in zip(st["recent"], reversed(sess[-10:])):
+        imp = alert_impact.session_impact(sobj["start"], sobj["end"], now)
+        item["lost_minutes"] = imp["minutes"]
+        item["lessons"] = imp["lessons"]
+    return _json(st)
 
 
 # ---------------- дії адміна ----------------
@@ -360,6 +401,83 @@ async def admin_announce(request: web.Request) -> web.Response:
     return _ok()
 
 
+async def admin_settings(request: web.Request) -> web.Response:
+    b = await _body(request)
+    changes = b.get("settings", b)
+    if not isinstance(changes, dict) or not changes:
+        raise ApiError(400, "Немає що змінювати")
+    try:
+        new = settings.set_many(changes)
+    except ValueError as e:
+        raise ApiError(400, str(e))
+    return _json({"ok": True, "settings": new})
+
+
+async def admin_weektype(request: web.Request) -> web.Response:
+    deps: WebAppDeps = request.app[DEPS]
+    b = await _body(request)
+    value = b.get("value")
+    if value not in ("school", "home"):
+        raise ApiError(400, "value має бути school або home")
+    d = _date(b["date"]) if b.get("date") else deps.now_fn().date()
+    monday = d - timedelta(days=d.weekday())
+    anchor = monday if value == "school" else monday - timedelta(days=7)
+    settings.set_many({"school_week_anchor": anchor.isoformat()})
+    return _ok()
+
+
+async def admin_holiday_add(request: web.Request) -> web.Response:
+    b = await _body(request)
+    start, end = _date(b.get("start")), _date(b.get("end"))
+    name = str(b.get("name") or "").strip()
+    if len(name) > 60:
+        raise ApiError(400, "Назва задовга (максимум 60 символів)")
+    after = b.get("after") or None
+    if after not in (None, "home", "school"):
+        raise ApiError(400, "after має бути home або school")
+    weeks = _int(b.get("after_weeks", 1), 1, 8, "Кількість тижнів")
+    try:
+        holidays.add(start, end, name, after, weeks)
+    except ValueError as e:
+        raise ApiError(400, str(e))
+    return _ok()
+
+
+async def admin_holiday_remove(request: web.Request) -> web.Response:
+    b = await _body(request)
+    if not holidays.remove(_date(b.get("start"))):
+        raise ApiError(404, "Таких канікул немає")
+    return _ok()
+
+
+async def admin_testmsg(request: web.Request) -> web.Response:
+    deps: WebAppDeps = request.app[DEPS]
+    try:
+        await deps.bot.send_message(deps.chat_id, "✅ Тестове повідомлення: бот і Mini App працюють")
+    except Exception as e:
+        log.warning("Тестове повідомлення не надіслано: %s", e)
+        raise ApiError(502, "Не вдалося надіслати в чат (чи бот у групі й має право писати?)")
+    return _ok()
+
+
+async def admin_diag(request: web.Request) -> web.Response:
+    deps: WebAppDeps = request.app[DEPS]
+    snap = deps.alert_state_fn() or {}
+    files = {}
+    try:
+        files = {f.name: f.stat().st_size for f in sorted(settings.DATA_DIR.glob("*.json"))}
+    except OSError:
+        pass
+    return _json({
+        "uptime_seconds": int(time.time() - deps.started_at),
+        "version": deps.version,
+        "data_dir": str(settings.DATA_DIR),
+        "files": files,
+        "alert_api": {"data_age_seconds": snap.get("data_age_seconds"), "stale": bool(snap.get("stale", False)),
+                      "last_error": snap.get("last_error")},
+    })
+
+
 # ---------------- статика і збірка застосунку ----------------
 
 async def index_handler(request: web.Request) -> web.StreamResponse:
@@ -386,10 +504,13 @@ def create_app(deps: WebAppDeps) -> web.Application:
     app.router.add_get("/healthz", health_handler)
     app.router.add_get("/api/state", state_handler)
     app.router.add_get("/api/stats", stats_handler)
+    app.router.add_get("/api/admin/diag", admin_diag)
     for name, handler in {
         "cancel": admin_cancel, "settime": admin_settime, "resettime": admin_resettime,
         "endnow": admin_endnow, "undoend": admin_undoend, "addlesson": admin_addlesson,
         "removelesson": admin_removelesson, "inperson": admin_inperson, "announce": admin_announce,
+        "settings": admin_settings, "weektype": admin_weektype, "testmsg": admin_testmsg,
+        "holiday/add": admin_holiday_add, "holiday/remove": admin_holiday_remove,
     }.items():
         app.router.add_post(f"/api/admin/{name}", handler)
     return app

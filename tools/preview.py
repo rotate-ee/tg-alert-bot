@@ -31,6 +31,7 @@ ap.add_argument("--week", choices=["school", "home"], default="school")
 ap.add_argument("--alert", choices=["none", "yellow", "red"], default="yellow")
 ap.add_argument("--time", default=None, help='напр. "2026-10-15 12:40" (за замовчуванням - реальний час)')
 ap.add_argument("--as-member", action="store_true", help="не адмін")
+ap.add_argument("--stale", action="store_true", help="показати попередження \"дані про тривоги застаріли\"")
 args = ap.parse_args()
 
 fake_start = datetime.strptime(args.time, "%Y-%m-%d %H:%M").replace(tzinfo=KYIV) if args.time else datetime.now(KYIV)
@@ -80,6 +81,25 @@ def seed():
         alert_history.sync(True, args.alert, fake_start - timedelta(minutes=12))
 
 
+def alert_snapshot() -> dict:
+    active = args.alert != "none"
+    threats = []
+    if active:
+        threats = [{"type": "drones", "label": "Дрони", "level": "yellow"}]
+        if args.alert == "red":
+            threats.append({"type": "ballistic_missiles", "label": "Балістика", "level": "red"})
+    return {
+        "active": active, "level": args.alert if active else None, "threats": threats, "notes": None,
+        "data_age_seconds": 400 if args.stale else 4, "stale": args.stale,
+        "last_error": "HTTP 429 - перевищено ліміт запитів" if args.stale else None,
+        "nearby": [
+            {"title": "Миколаївський район", "type": "raion", "level": "yellow"},
+            {"title": "Херсонська область", "type": "oblast", "level": "red"},
+            {"title": "Одеська область", "type": "oblast", "level": "yellow"},
+        ],
+    }
+
+
 def now_fn():
     return fake_start + timedelta(seconds=time.monotonic() - t0)
 
@@ -89,7 +109,7 @@ async def main():
     deps = WebAppDeps(
         bot_token=os.environ["BOT_TOKEN"], chat_id=os.environ["CHAT_ID"],
         admin_ids={1}, bot=FakeBot(),
-        alert_state_fn=lambda: (args.alert != "none", None if args.alert == "none" else args.alert),
+        alert_state_fn=alert_snapshot,
         now_fn=now_fn, region_title="Вознесенський район", require_membership=False,
         auth_fn=lambda raw: {"id": 2 if args.as_member else 1, "first_name": "Демо"},  # ТІЛЬКИ для перегляду
     )
