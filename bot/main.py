@@ -787,24 +787,9 @@ def _level_emoji_and_label(level: str | None) -> tuple[str, str]:
     return "🔴", "Рівень не визначено"
 
 
-def _in_notify_window(now: datetime) -> bool:
-    """Чи потрапляє поточний час у діапазон ALERT_NOTIFY_FROM..ALERT_NOTIFY_TO."""
-    if settings.get("alerts_muted"):
-        return False  # адмін вимкнув сповіщення в чат з міні-застосунку
-    raw_from = config.ALERT_NOTIFY_FROM
-    raw_to = config.ALERT_NOTIFY_TO
-    if not raw_from or not raw_to or raw_from.lower() == "off" or raw_to.lower() == "off":
-        return True  # обмеження вимкнене
-    try:
-        fh, fm = map(int, raw_from.split(":"))
-        th, tm = map(int, raw_to.split(":"))
-    except ValueError:
-        return True  # некоректний формат - не обмежуємо
-
-    now_t = now.time()
-    start_t = time(fh, fm)
-    end_t = time(th, tm)
-    return start_t <= now_t <= end_t
+def _alert_notifications_enabled() -> bool:
+    """Alert notifications run 24/7; only the explicit admin mute can pause them."""
+    return not settings.get("alerts_muted")
 
 
 async def _flush_alert_message_deletions():
@@ -834,12 +819,7 @@ async def watch_alerts():
         while True:
             try:
                 event = await alert_watcher.poll_once(session)
-                now = datetime.now(KYIV_TZ)
-                is_weekend = now.weekday() >= 5
-                should_notify = (
-                    (config.NOTIFY_ALERTS_ON_WEEKENDS or not is_weekend)
-                    and _in_notify_window(now)
-                )
+                should_notify = _alert_notifications_enabled()
 
                 if event == "ended" and should_notify:
                     pending_notifications.append(("ended", None))
@@ -848,7 +828,7 @@ async def watch_alerts():
                 elif event == "level_changed" and config.NOTIFY_ON_START and should_notify:
                     pending_notifications.append(("level_changed", alert_watcher.level))
                 elif event in ("started", "ended", "level_changed"):
-                    log.info("Сповіщення про %s пропущено через налаштування часу/вихідних", event)
+                    log.info("Сповіщення про %s пропущено: адмін вимкнув їх у застосунку", event)
 
                 if event == "started":
                     current, _, _, _ = find_current_and_next(datetime.now(KYIV_TZ))
