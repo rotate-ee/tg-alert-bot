@@ -206,6 +206,7 @@ async def state(request: web.Request) -> web.Response:
         return web.json_response({
             "now": datetime.now(KYIV_TZ).isoformat(timespec="seconds"),
             "maintenance": {"mode": cfg["app_mode"], "message": cfg["maintenance_message"]},
+            "ticker_text": cfg["ticker_text"],
             "alert_map": _alert_map_block(watcher),
         })
     start = _d(request.query["from"]) if "from" in request.query else datetime.now(KYIV_TZ).date()
