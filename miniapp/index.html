@@ -242,7 +242,7 @@ const undo=c=>c.kind==="cancel"?post("/api/admin/cancel",{date:c.date,number:c.n
 
 function banner(){const a=st.alert;return `<button class="ban ${a.active?cls(a):""}" data-go="al">${a.active?"🚨 "+lvl(a):"🟢 Тривоги немає"}<span>${a.active&&since(a)!==null?dur(since(a)):"Детальніше"}</span></button>`}
 function ticker(text=st.settings?.ticker_text){if(!text)return "";const safe=esc(text);return `<aside class="ticker" role="status"><span class="ticker-label">ОГОЛОШЕННЯ</span><div class="ticker-window"><div class="ticker-track"><span>${safe}</span><span aria-hidden="true">${safe}</span></div></div></aside>`}
-function prepareTicker(){document.querySelectorAll(".ticker").forEach(el=>{const win=el.querySelector(".ticker-window"),track=el.querySelector(".ticker-track"),item=track?.querySelector("span");if(!win||!track||!item)return;const gap=Math.ceil(win.clientWidth);el.style.setProperty("--ticker-gap",`${gap}px`);track.style.animationDuration=`${Math.max(8,Math.min(40,item.scrollWidth/65)}s`})}
+function prepareTicker(){document.querySelectorAll(".ticker").forEach(el=>{const win=el.querySelector(".ticker-window"),track=el.querySelector(".ticker-track"),item=track?.querySelector("span");if(!win||!track||!item)return;const gap=Math.ceil(win.clientWidth);el.style.setProperty("--ticker-gap",`${gap}px`);track.style.animationDuration=`${Math.max(8,Math.min(40,item.scrollWidth/65))}s`})}
 function sch(){
  const now=kyiv(),t=iso(now),cur=now.getUTCHours()*60+now.getUTCMinutes(),day=st.days[sel],L=day.lessons;
  const days=Object.keys(st.days).slice(0,5);
