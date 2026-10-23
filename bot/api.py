@@ -175,6 +175,7 @@ def _day_block(d: date) -> dict:
             is_remote = lessons.is_lesson_remote_today(l, d)
             items.append({
                 "number": l["number"], "name": l["name"], "start": l["start"], "end": l["end"],
+                "subgroup": l.get("subgroup"), "subgroup_label": l.get("subgroup_label"),
                 "room": l["room"] if school is not False and not is_remote else None,
                 "cancelled": l["cancelled"], "remote": is_remote,
                 "remote_capable": school is not False,
@@ -189,7 +190,11 @@ def _lesson_names() -> list[str]:
     for entries in lessons.load_schedule()["days"].values():
         for entry in entries:
             values = entry.values() if isinstance(entry, dict) else (entry,)
-            names.update(value for value in values if isinstance(value, str) and value)
+            for value in values:
+                if isinstance(value, str) and value:
+                    names.add(value)
+                elif isinstance(value, dict):
+                    names.update(name for name in value.values() if isinstance(name, str) and name)
     return sorted(names, key=str.casefold)
 
 
@@ -279,6 +284,12 @@ async def a_cancel(request: web.Request) -> web.Response:
     _need_admin(request)
     b = await request.json()
     d, num = _d(b["date"]), int(b["number"])
+    subgroup = b.get("subgroup")
+    if subgroup:
+        if subgroup not in {"girls", "boys"}:
+            raise ValueError("subgroup")
+        cancellations.set_group_cancelled(d, num, subgroup, bool(b.get("cancel", True)))
+        return web.json_response({"ok": True})
     if b.get("cancel", True):
         cancellations.cancel_lesson(d, num)
     else:
@@ -396,7 +407,7 @@ async def a_overview(request: web.Request) -> web.Response:
             n = l["number"]
             base = {"date": d.isoformat(), "number": n, "name": l["name"]}
             if l["cancelled"]:
-                changes.append({**base, "kind": "cancel", "text": "скасовано"})
+                changes.append({**base, "subgroup": l.get("subgroup"), "kind": "cancel", "text": "Класрум" if l.get("subgroup") else "скасовано"})
             if bell_overrides.get_override(d, n):
                 changes.append({**base, "kind": "time", "text": f"час {l['start']}-{l['end']}"})
             if early_end.get_early_end(d, n):

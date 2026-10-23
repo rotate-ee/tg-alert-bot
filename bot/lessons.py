@@ -164,6 +164,23 @@ def _build_day_lessons(
     for idx, entry in enumerate(day_entries):
         number = idx + 1
         name = _resolve_entry(entry, group)
+        subgroups = entry.get("subgroups") if isinstance(entry, dict) else None
+        if subgroups:
+            for subgroup, subgroup_name in subgroups.items():
+                bell = bells.get(number)
+                room_entry = room_entries[idx] if idx < len(room_entries) else None
+                lessons.append({
+                    "number": number,
+                    "name": subgroup_name,
+                    "subgroup": subgroup,
+                    "subgroup_label": {"girls": "Дівчата", "boys": "Хлопці"}.get(subgroup, subgroup),
+                    "start": bell["start"] if bell else None,
+                    "end": bell["end"] if bell else None,
+                    "remote": bell is None or number in remote_numbers,
+                    "cancelled": False,
+                    "room": _resolve_entry(room_entry, group),
+                })
+            continue
         if name is None:
             continue  # в эту группу недель этого урока просто нет
 
@@ -215,6 +232,7 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
     lessons = _build_day_lessons(
         day_entries, schedule["bells"], group, set(), schedule["remote_numbers"], room_entries
     )
+    cancelled_groups = cancellations.get_cancelled_groups(today)
 
     # разова перенумерація (/api, міні-застосунок): урок переходить в інший
     # слот дзвінка; скасування і зміни часу далі рахуються за НОВИМИ номерами
@@ -228,7 +246,9 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
             lesson["end"] = bell["end"] if bell else None
             lesson["remote"] = bell is None or new_n in schedule["remote_numbers"]
     for lesson in lessons:
-        lesson["cancelled"] = lesson["number"] in cancelled
+        lesson["cancelled"] = lesson["number"] in cancelled or (
+            lesson.get("subgroup") in cancelled_groups.get(lesson["number"], set())
+        )
 
     # разові зміни часу дзвінка (/settime, /endnow) - перекривають
     # стандартний час тільки для цього уроку і цієї дати
@@ -299,6 +319,8 @@ def format_cancelled_status(lesson: dict, d: date) -> str:
     """
     if not lesson["cancelled"]:
         return ""
+    if lesson.get("subgroup"):
+        return " (Класрум)"
     if is_school_week(d) is False:
         return " (Класрум)"
     return " (скасовано)"

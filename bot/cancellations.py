@@ -34,17 +34,30 @@ def _key(d: date) -> str:
     return d.isoformat()
 
 
+def _day_data(data: dict, d: date) -> tuple[set[int], dict[int, set[str]]]:
+    value = data.get(_key(d), [])
+    # Older files stored a bare list of lesson numbers.
+    if isinstance(value, list):
+        return set(value), {}
+    numbers = set(value.get("numbers", []))
+    groups = {int(number): set(names) for number, names in value.get("groups", {}).items()}
+    return numbers, groups
+
+
 def get_cancelled_numbers(d: date) -> set[int]:
-    data = _load()
-    return set(data.get(_key(d), []))
+    return _day_data(_load(), d)[0]
+
+
+def get_cancelled_groups(d: date) -> dict[int, set[str]]:
+    return _day_data(_load(), d)[1]
 
 
 def cancel_lesson(d: date, number: int) -> None:
     data = _load()
     k = _key(d)
-    nums = set(data.get(k, []))
+    nums, groups = _day_data(data, d)
     nums.add(number)
-    data[k] = sorted(nums)
+    data[k] = {"numbers": sorted(nums), "groups": {str(n): sorted(v) for n, v in groups.items() if v}}
     _save(data)
 
 
@@ -52,16 +65,36 @@ def uncancel_lesson(d: date, number: int) -> bool:
     """Возвращает True, если урок был отменён и теперь снова активен."""
     data = _load()
     k = _key(d)
-    nums = set(data.get(k, []))
+    nums, groups = _day_data(data, d)
     if number not in nums:
         return False
     nums.discard(number)
-    if nums:
-        data[k] = sorted(nums)
+    if nums or groups:
+        data[k] = {"numbers": sorted(nums), "groups": {str(n): sorted(v) for n, v in groups.items() if v}}
     else:
         data.pop(k, None)
     _save(data)
     return True
+
+
+def set_group_cancelled(d: date, number: int, group: str, cancelled: bool) -> None:
+    if group not in {"girls", "boys"}:
+        raise ValueError("group")
+    data = _load()
+    k = _key(d)
+    numbers, groups = _day_data(data, d)
+    selected = groups.setdefault(number, set())
+    if cancelled:
+        selected.add(group)
+    else:
+        selected.discard(group)
+    if not selected:
+        groups.pop(number, None)
+    if numbers or groups:
+        data[k] = {"numbers": sorted(numbers), "groups": {str(n): sorted(v) for n, v in groups.items() if v}}
+    else:
+        data.pop(k, None)
+    _save(data)
 
 
 def diagnostics() -> str:
