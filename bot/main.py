@@ -35,6 +35,7 @@ import early_end
 import extra_lessons
 import holidays
 import remote_overrides
+import remote_lesson_overrides
 import settings
 from alerts import AlertWatcher
 from lessons import (
@@ -82,6 +83,8 @@ bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher()
 
 alert_watcher = AlertWatcher(token=config.ALERTS_TOKEN, region_title=config.REGION_TITLE)
+alert_remote_action_lock = asyncio.Lock()
+alert_remote_confirmed_days: set[date] = set()
 
 
 # ---------- команды для ручной проверки в чате ----------
@@ -499,7 +502,7 @@ async def ask_admins_if_dismissed(current_lesson: dict, today: date):
         return
     text = (
         f"🔴 Тривога. Зараз {current_lesson['number']}-й урок «{current_lesson['name']}».\n"
-        "Вас відпустили?"
+        "Вас відпустили, і решта уроків сьогодні буде дистанційно?"
     )
     kb = _alert_dismiss_keyboard(today, current_lesson["number"])
     for admin_id in config.ADMIN_IDS:
@@ -515,6 +518,7 @@ async def cb_alert_dismiss_no(callback: CallbackQuery):
         await callback.answer()
         return
     await callback.message.edit_text(callback.message.text + "\n\n➖ Відповідь: ні. Нічого не змінюю.")
+    await callback.message.edit_reply_markup(reply_markup=None)
     await callback.answer()
 
 
@@ -527,15 +531,61 @@ async def cb_alert_dismiss_yes(callback: CallbackQuery):
     _, date_str, number_str = callback.data.split(":")
     d = date.fromisoformat(date_str)
     number = int(number_str)
+    async with alert_remote_action_lock:
+        if d in alert_remote_confirmed_days:
+            await callback.answer("Решту дня вже позначено дистанційною")
+            await callback.message.edit_reply_markup(reply_markup=None)
+            return
 
-    lesson = get_lesson_by_number(number, d)
-    cancellations.cancel_lesson(d, number)
-    name = lesson["name"] if lesson else "?"
+        current = get_lesson_by_number(number, d)
+        current_start = lesson_start_datetime(current, d) if current else None
+        now = datetime.now(KYIV_TZ)
+        day_lessons = get_today_lessons(datetime.combine(d, time(12, 0), tzinfo=KYIV_TZ))
+        future_lessons = []
+        for lesson in day_lessons:
+            if lesson["cancelled"] or lesson["number"] == number:
+                continue
+            start = lesson_start_datetime(lesson, d)
+            follows_current = (
+                lesson["number"] > number if current_start is None or start is None
+                else start > current_start
+            )
+            if follows_current and (start is None or start > now):
+                future_lessons.append(lesson)
 
-    await callback.message.edit_text(
-        callback.message.text + f"\n\n✅ Скасовано: {number}-й урок «{name}» ({d.isoformat()})"
-    )
-    await callback.answer("Урок скасовано")
+        for lesson in future_lessons:
+            remote_lesson_overrides.set_remote(d, lesson["number"])
+            remote_overrides.clear_in_person(d, lesson["number"])
+
+        if future_lessons:
+            lesson_lines = "\n".join(
+                f"• {lesson['number']}-й урок — {escape(lesson['name'])}"
+                + (f" о {lesson['start']}" if lesson["start"] else "")
+                for lesson in future_lessons
+            )
+            announcement = (
+                "🏠 <b>Увага! Після повітряної тривоги решта уроків сьогодні проходитиме дистанційно.</b>\n\n"
+                f"{lesson_lines}"
+            )
+        else:
+            announcement = (
+                "🏠 <b>Увага! Адміністратор підтвердив дистанційний формат до кінця дня.</b>\n"
+                "За розкладом майбутніх уроків більше немає."
+            )
+
+        try:
+            await bot.send_message(config.CHAT_ID, announcement, parse_mode=ParseMode.HTML)
+        except Exception:
+            log.exception("Не вдалося надіслати оголошення про дистанційні уроки після тривоги")
+            await callback.answer("Не вдалося надіслати оголошення в чат")
+            return
+
+        alert_remote_confirmed_days.add(d)
+        names = ", ".join(f"{lesson['number']}-й {lesson['name']}" for lesson in future_lessons)
+        result = "Решту уроків позначено дистанційними" + (f": {names}." if names else ". Майбутніх уроків за розкладом немає.")
+        await callback.message.edit_text(callback.message.text + f"\n\n✅ {result}")
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.answer("Оголошення надіслано в чат")
 
 
 # ---------- "7/8-й урок сьогодні очно?" - щоденне питання в очний день ----------

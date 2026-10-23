@@ -37,6 +37,7 @@ log = logging.getLogger("api")
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 MAX_DAYS = 31
 STARTED_AT = _time.time()
+_report_last_sent: dict[int, float] = {}
 
 
 def verify_init_data(init_data: str) -> dict | None:
@@ -511,6 +512,45 @@ async def a_announce(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def a_report(request: web.Request) -> web.Response:
+    user = verify_init_data(request.headers.get("X-Init-Data", ""))
+    if user is None:
+        raise web.HTTPForbidden(text=json.dumps({"error": "forbidden"}), content_type="application/json")
+
+    user_id = int(user["id"])
+    now = _time.time()
+    if now - _report_last_sent.get(user_id, 0) < 60:
+        raise web.HTTPTooManyRequests(text=json.dumps({"error": "rate_limited"}), content_type="application/json")
+
+    body = await request.json()
+    text = str(body.get("text", "")).strip()
+    if len(text) < 3 or len(text) > 1000:
+        raise ValueError("text")
+    page_names = {"sch": "Розклад", "dut": "Чергові", "al": "Тривоги", "adm": "Керування"}
+    page = body.get("page", "sch")
+    if page not in page_names:
+        raise ValueError("page")
+    raw_date = str(body.get("date", "")).strip()
+    date_line = f"\nДата розкладу: {_d(raw_date).isoformat()}" if raw_date else ""
+
+    name = " ".join(part for part in (user.get("first_name"), user.get("last_name")) if part) or "Користувач"
+    username = f" (@{user['username']})" if user.get("username") else ""
+    report = f"🐞 Помилка в застосунку\nВід: {name}{username} · ID {user_id}\nРозділ: {page_names[page]}{date_line}\n\n{text}"
+    sent = False
+    if config.ADMIN_IDS:
+        for admin_id in config.ADMIN_IDS:
+            try:
+                await request.app["bot"].send_message(admin_id, report)
+                sent = True
+            except Exception:
+                log.exception("Не вдалося переслати повідомлення про помилку адміну %s", admin_id)
+    if not sent:
+        raise web.HTTPServiceUnavailable(text=json.dumps({"error": "admins_unreachable"}), content_type="application/json")
+
+    _report_last_sent[user_id] = now
+    return web.json_response({"ok": True})
+
+
 async def start(bot, watcher) -> web.AppRunner:
     app = web.Application(middlewares=[cors])
     app["bot"], app["watcher"] = bot, watcher
@@ -533,6 +573,7 @@ async def start(bot, watcher) -> web.AppRunner:
     app.router.add_post("/api/admin/settings", a_settings)
     app.router.add_get("/api/admin/overview", a_overview)
     app.router.add_post("/api/admin/announce", a_announce)
+    app.router.add_post("/api/report", a_report)
     app.router.add_get("/", lambda r: web.Response(text="ok"))
     runner = web.AppRunner(app)
     await runner.setup()
