@@ -144,7 +144,7 @@ label{margin:0 0 7px;font-size:11px;font-weight:700;letter-spacing:.045em;text-t
 <div class="sheet" id="sheet"><div class="p" id="panel"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const tg=window.Telegram&&Telegram.WebApp;if(tg){tg.ready();tg.expand();}
+const tg=window.Telegram&&Telegram.WebApp;if(tg){tg.ready();tg.expand();try{if(typeof tg.requestFullscreen==="function"&&!tg.isFullscreen)tg.requestFullscreen()}catch(_){}}
 const qs=new URLSearchParams(location.search);
 let API=qs.get("api")||localStorage.getItem("api")||"";if(qs.get("api"))localStorage.setItem("api",API);
 const hdr=()=>({"Content-Type":"application/json","X-Init-Data":tg?tg.initData:""});
