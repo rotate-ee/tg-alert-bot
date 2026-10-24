@@ -176,6 +176,7 @@ def _day_block(d: date) -> dict:
             items.append({
                 "number": l["number"], "name": l["name"], "start": l["start"], "end": l["end"],
                 "subgroup": l.get("subgroup"), "subgroup_label": l.get("subgroup_label"),
+                "in_person": bool(l.get("subgroup") and remote_lesson_overrides.is_group_in_person(d, l["number"], l["subgroup"])),
                 "room": l["room"] if school is not False and not is_remote else None,
                 "cancelled": l["cancelled"], "remote": is_remote,
                 "remote_capable": school is not False,
@@ -363,8 +364,12 @@ async def a_remote(request: web.Request) -> web.Response:
     if subgroup:
         if subgroup not in {"girls", "boys"} or not lesson.get("subgroup"):
             raise ValueError("subgroup")
-        if b.get("clear") or not b.get("value", True):
+        if b.get("clear"):
             remote_lesson_overrides.clear_remote(d, num, subgroup)
+            remote_lesson_overrides.clear_group_in_person(d, num, subgroup)
+        elif not b.get("value", True):
+            remote_lesson_overrides.clear_remote(d, num, subgroup)
+            remote_lesson_overrides.set_group_in_person(d, num, subgroup)
         else:
             cancellations.set_group_cancelled(d, num, subgroup, False)
             remote_lesson_overrides.set_remote(d, num, subgroup)

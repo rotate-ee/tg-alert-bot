@@ -52,7 +52,10 @@ def is_lesson_remote_today(lesson: dict, d: date) -> bool:
       підтвердив "Так, буде очно" на сьогодні - False.
     - Інакше (типовий випадок за замовчуванням) - True.
     """
-    if remote_lesson_overrides.is_remote(d, lesson["number"], lesson.get("subgroup")):
+    subgroup = lesson.get("subgroup")
+    if subgroup and remote_lesson_overrides.is_group_in_person(d, lesson["number"], subgroup):
+        return False
+    if remote_lesson_overrides.is_remote(d, lesson["number"], subgroup):
         return True
     if not lesson["remote"]:
         return False
