@@ -289,7 +289,10 @@ async def a_cancel(request: web.Request) -> web.Response:
     if subgroup:
         if subgroup not in {"girls", "boys"}:
             raise ValueError("subgroup")
-        cancellations.set_group_cancelled(d, num, subgroup, bool(b.get("cancel", True)))
+        cancel = bool(b.get("cancel", True))
+        cancellations.set_group_cancelled(d, num, subgroup, cancel)
+        if cancel:
+            remote_lesson_overrides.clear_remote(d, num, subgroup)
         return web.json_response({"ok": True})
     if b.get("cancel", True):
         cancellations.cancel_lesson(d, num)
@@ -352,9 +355,20 @@ async def a_remote(request: web.Request) -> web.Response:
     _need_admin(request)
     b = await request.json()
     d, num = _d(b["date"]), int(b["number"])
-    lesson = lessons.get_lesson_by_number(num, d)
+    subgroup = b.get("subgroup")
+    lesson = next((item for item in lessons.get_lessons_for_date(d)
+                   if item["number"] == num and (not subgroup or item.get("subgroup") == subgroup)), None)
     if lesson is None:
         raise ValueError("lesson")
+    if subgroup:
+        if subgroup not in {"girls", "boys"} or not lesson.get("subgroup"):
+            raise ValueError("subgroup")
+        if b.get("clear") or not b.get("value", True):
+            remote_lesson_overrides.clear_remote(d, num, subgroup)
+        else:
+            cancellations.set_group_cancelled(d, num, subgroup, False)
+            remote_lesson_overrides.set_remote(d, num, subgroup)
+        return web.json_response({"ok": True})
     if b.get("clear"):
         remote_lesson_overrides.clear_remote(d, num)
         remote_overrides.clear_in_person(d, num)
@@ -408,7 +422,10 @@ async def a_overview(request: web.Request) -> web.Response:
             n = l["number"]
             base = {"date": d.isoformat(), "number": n, "name": l["name"]}
             if l["cancelled"]:
-                changes.append({**base, "subgroup": l.get("subgroup"), "kind": "cancel", "text": "Класрум" if l.get("subgroup") else "скасовано"})
+                subgroup_label = l.get("subgroup_label")
+                changes.append({**base, "subgroup": l.get("subgroup"), "kind": "cancel", "text": f"{subgroup_label}: Класрум" if subgroup_label else "скасовано"})
+            if l.get("subgroup") and remote_lesson_overrides.is_group_remote(d, n, l["subgroup"]):
+                changes.append({**base, "subgroup": l["subgroup"], "kind": "groupremote", "text": f"{l.get('subgroup_label', l['subgroup'])}: дистанційно"})
             if bell_overrides.get_override(d, n):
                 changes.append({**base, "kind": "time", "text": f"час {l['start']}-{l['end']}"})
             if early_end.get_early_end(d, n):

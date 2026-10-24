@@ -52,7 +52,7 @@ def is_lesson_remote_today(lesson: dict, d: date) -> bool:
       підтвердив "Так, буде очно" на сьогодні - False.
     - Інакше (типовий випадок за замовчуванням) - True.
     """
-    if remote_lesson_overrides.is_remote(d, lesson["number"]):
+    if remote_lesson_overrides.is_remote(d, lesson["number"], lesson.get("subgroup")):
         return True
     if not lesson["remote"]:
         return False
@@ -319,11 +319,47 @@ def format_cancelled_status(lesson: dict, d: date) -> str:
     """
     if not lesson["cancelled"]:
         return ""
+    if lesson.get("groups"):
+        return ""
     if lesson.get("subgroup"):
         return " (Класрум)"
     if is_school_week(d) is False:
         return " (Класрум)"
     return " (скасовано)"
+
+
+def _display_lessons(lessons: list[dict]) -> list[dict]:
+    """Collapse parallel subgroup records into one visible schedule lesson."""
+    result: list[dict] = []
+    grouped: dict[tuple[int, str], dict] = {}
+    for lesson in lessons:
+        subgroup = lesson.get("subgroup")
+        if not subgroup:
+            result.append(lesson)
+            continue
+        key = (lesson["number"], lesson["name"])
+        item = grouped.get(key)
+        if item is None:
+            item = {**lesson, "subgroup": None, "subgroup_label": None, "groups": []}
+            grouped[key] = item
+            result.append(item)
+        item["groups"].append(lesson)
+    for item in result:
+        if item.get("groups"):
+            item["cancelled"] = all(group["cancelled"] for group in item["groups"])
+            item["remote"] = False
+    return result
+
+
+def _format_subgroup_status(lesson: dict, d: date) -> str:
+    groups = lesson.get("groups") or []
+    if not groups or not any(group["cancelled"] or is_lesson_remote_today(group, d) for group in groups):
+        return ""
+    states = []
+    for group in groups:
+        status = "Класрум" if group["cancelled"] else "дистанційно" if is_lesson_remote_today(group, d) else "очно"
+        states.append(f"{group.get('subgroup_label', group.get('subgroup'))}: {status}")
+    return " · " + " · ".join(states)
 
 
 def format_week_message(now: datetime | None = None) -> str:
@@ -343,7 +379,7 @@ def format_week_message(now: datetime | None = None) -> str:
     blocks = []
     for offset in range(7):
         d = monday + timedelta(days=offset)
-        lessons = get_lessons_for_date(d)
+        lessons = _display_lessons(get_lessons_for_date(d))
         if not lessons:
             continue
 
@@ -358,7 +394,7 @@ def format_week_message(now: datetime | None = None) -> str:
             status = format_cancelled_status(lesson, d)
             lines.append(
                 f"<code>{lesson['number']:02d}</code>  <b>{escape(lesson['name'])}</b>"
-                f"\n       {escape(time_part + room_part + status)}"
+                f"\n       {escape(time_part + room_part + status + _format_subgroup_status(lesson, d))}"
             )
 
         blocks.append("\n".join(lines))
@@ -383,7 +419,7 @@ def find_current_and_next(now: datetime | None = None):
     if now is None:
         now = datetime.now(KYIV_TZ)
 
-    today_lessons = get_today_lessons(now)
+    today_lessons = _display_lessons(get_today_lessons(now))
     now_t = now.time()
 
     current = None
@@ -428,24 +464,24 @@ def format_status_message(prefix: str, now: datetime | None = None) -> str:
         body = (
             f"🟢 <b>Зараз іде {current['number']}-й урок</b>\n"
             f"{escape(current['name'])}\n"
-            f"⏰ <code>{escape(format_lesson_time(current, now.date()) + format_lesson_room(current, now.date()))}</code>"
+            f"⏰ <code>{escape(format_lesson_time(current, now.date()) + format_lesson_room(current, now.date()) + _format_subgroup_status(current, now.date()))}</code>"
         )
     elif upcoming:
         body = (
             f"☕ <b>Зараз перерва</b>\n"
             f"Наступний — {upcoming['number']}-й урок <b>{escape(upcoming['name'])}</b>\n"
-            f"⏰ Початок о <code>{escape(upcoming['start'])}</code>"
+            f"⏰ Початок о <code>{escape(upcoming['start'] + _format_subgroup_status(upcoming, now.date()))}</code>"
         )
     else:
         body = "✅ <b>На сьогодні уроків більше немає</b>"
 
     if remote_no_time_today:
-        names = "\n".join(f"• {lesson['number']}-й урок — {escape(lesson['name'])}" for lesson in remote_no_time_today)
+        names = "\n".join(f"• {lesson['number']}-й урок — {escape(lesson['name'] + _format_subgroup_status(lesson, now.date()))}" for lesson in remote_no_time_today)
         body += f"\n\n🏠 <b>Дистанційні уроки без фіксованого часу</b>\n{names}"
 
     if cancelled_today:
         names = "\n".join(
-            f"• {lesson['number']}-й урок — {escape(lesson['name'])}{escape(format_cancelled_status(lesson, now.date()))}"
+            f"• {lesson['number']}-й урок — {escape(lesson['name'])}{escape(format_cancelled_status(lesson, now.date()) + _format_subgroup_status(lesson, now.date()))}"
             for lesson in cancelled_today
         )
         body += f"\n\n🚫 <b>Скасовані уроки сьогодні</b>\n{names}"
@@ -462,7 +498,7 @@ def format_day_schedule_message(prefix: str, now: datetime | None = None) -> str
     if now is None:
         now = datetime.now(KYIV_TZ)
 
-    today_lessons = get_today_lessons(now)
+    today_lessons = _display_lessons(get_today_lessons(now))
     if not today_lessons:
         return None
 
@@ -473,7 +509,7 @@ def format_day_schedule_message(prefix: str, now: datetime | None = None) -> str
         status = format_cancelled_status(lesson, now.date())
         lines.append(
             f"<code>{lesson['number']:02d}</code>  <b>{escape(lesson['name'])}</b>"
-            f"\n       {escape(time_part + room_part + status)}"
+            f"\n       {escape(time_part + room_part + status + _format_subgroup_status(lesson, now.date()))}"
         )
 
     body = "\n".join(lines)
