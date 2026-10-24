@@ -273,6 +273,11 @@ async def a_duty(request: web.Request) -> web.Response:
         duty_overrides.clear_override(day)
         return web.json_response({"ok": True})
 
+    if day.weekday() >= 5 or holidays.get_holiday(day) is not None:
+        raise ValueError("duty_day")
+    if lessons.is_school_week(day) is False:
+        raise ValueError("remote_day")
+
     pair = body.get("students")
     if (not isinstance(pair, list) or len(pair) != 2
             or any(not isinstance(name, str) or name not in config.DUTY_STUDENTS for name in pair)

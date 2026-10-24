@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 import config
 import duty_overrides
 import holidays
+import lessons
 
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
@@ -22,13 +23,15 @@ def upcoming(limit: int = 5, today: date | None = None) -> list[dict]:
     slot = 0
     cursor = anchor
     while cursor < current:
-        if cursor.weekday() < 5 and holidays.get_holiday(cursor) is None:
+        if (cursor.weekday() < 5 and holidays.get_holiday(cursor) is None
+                and lessons.is_school_week(cursor) is not False):
             slot += 1
         cursor += timedelta(days=1)
 
     result = []
     while len(result) < limit:
-        if current.weekday() < 5 and holidays.get_holiday(current) is None:
+        if (current.weekday() < 5 and holidays.get_holiday(current) is None
+                and lessons.is_school_week(current) is not False):
             first = slot * 2 % len(students)
             pair = [students[first], students[(first + 1) % len(students)]]
             override = duty_overrides.get_override(current)
