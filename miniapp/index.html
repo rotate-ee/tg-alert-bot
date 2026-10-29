@@ -553,8 +553,13 @@ $("app").onchange=async e=>{if(e.target.id==="ad"&&e.target.value){adminDate=e.t
  if(e.target.id==="mute")act(()=>post("/api/admin/settings",{key:"alerts_muted",value:!e.target.checked}),e.target.checked?"Сповіщення увімкнено":"Сповіщення вимкнено")};
 async function boot(){if(!st)$("app").innerHTML='<div class="box sm" style="margin-top:24px">Завантажуємо застосунок…</div>';await load();if(!st.err)await loadAdmin();await pingActivity();render()}
 boot();
-setInterval(async()=>{if($("sheet").classList.contains("on")||tab==="adm")return;await load();if(tab==="dut")await loadDutySchedule();if(tab==="al")refreshAlertPage();else render()},15000);
-setInterval(async()=>{await pingActivity();if(tab!=="adm"||$("sheet").classList.contains("on"))return;await loadActivity();const section=$("activity-section");if(section){const wasOpen=section.open,holder=document.createElement("div");holder.innerHTML=activityBlock();const updated=holder.querySelector("#activity-section");if(updated){updated.open=wasOpen;section.replaceWith(updated)}}},15000);
+let pollTimer=null,activityTimer=null;
+function startPolling(){stopPolling();
+pollTimer=setInterval(async()=>{if($("sheet").classList.contains("on")||tab==="adm")return;await load();if(tab==="dut")await loadDutySchedule();if(tab==="al")refreshAlertPage();else render()},15000);
+activityTimer=setInterval(async()=>{await pingActivity();if(tab!=="adm"||$("sheet").classList.contains("on"))return;await loadActivity();const section=$("activity-section");if(section){const wasOpen=section.open,holder=document.createElement("div");holder.innerHTML=activityBlock();const updated=holder.querySelector("#activity-section");if(updated){updated.open=wasOpen;section.replaceWith(updated)}}},15000);}
+function stopPolling(){clearInterval(pollTimer);clearInterval(activityTimer)}
+document.addEventListener("visibilitychange",()=>{if(document.hidden)stopPolling();else{boot();startPolling()}});
+startPolling();
 </script>
 
 </body>
