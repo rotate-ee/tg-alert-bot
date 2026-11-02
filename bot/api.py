@@ -119,8 +119,6 @@ def _map_key(value: str | None) -> str:
 
 
 def _alert_map_block(watcher) -> dict:
-    # Send only statuses cached by the bot's regular poll; the browser never
-    # receives the alerts.in.ua token or makes a separate API request.
     oblasts, raions, cities = {}, {}, {}
 
     def merge(target: dict, key: str, title: str, level: str, scope: str) -> None:
@@ -147,7 +145,6 @@ def _alert_map_block(watcher) -> dict:
             raion = title or (alert.get("location_raion") or "").strip()
             merge(raions, _map_key(raion), raion, level, "raion")
         elif location_type == "hromada":
-            # Hromada borders are not shown, so mark its parent raion partial.
             raion = (alert.get("location_raion") or "").strip()
             if raion:
                 merge(raions, _map_key(raion), raion, level, "hromada")
@@ -203,7 +200,6 @@ async def state(request: web.Request) -> web.Response:
     cfg = settings.load()
     watcher = request.app["watcher"]
     if cfg["app_mode"] != "open" and _admin(request) is None:
-        # Do not expose application data to regular users while it is closed.
         return web.json_response({
             "now": datetime.now(KYIV_TZ).isoformat(timespec="seconds"),
             "maintenance": {"mode": cfg["app_mode"], "message": cfg["maintenance_message"]},
@@ -230,7 +226,6 @@ async def me(request: web.Request) -> web.Response:
 
 
 async def duty_schedule(request: web.Request) -> web.Response:
-    # Імена класу не віддаємо публічному API: потрібен підписаний запуск у Telegram.
     if verify_init_data(request.headers.get("X-Init-Data", "")) is None:
         raise web.HTTPForbidden(text=json.dumps({"error": "forbidden"}), content_type="application/json")
     return web.json_response({
@@ -399,7 +394,7 @@ async def a_settings(request: web.Request) -> web.Response:
     b = await request.json()
     key, value = str(b["key"]), b["value"]
     if key == "schedule_end" and value:
-        value = _d(str(value)).isoformat()  # перевірка формату YYYY-MM-DD
+        value = _d(str(value)).isoformat()
     if key == "remote_lesson_links":
         if not isinstance(value, dict) or len(value) > 100:
             raise ValueError("remote_lesson_links")
@@ -418,7 +413,6 @@ async def a_settings(request: web.Request) -> web.Response:
 
 
 async def a_overview(request: web.Request) -> web.Response:
-    """Усі розпорядження адміна на найближчі 3 тижні + діагностика системи."""
     _need_admin(request)
     today = datetime.now(KYIV_TZ).date()
     changes = []
@@ -462,7 +456,6 @@ async def a_overview(request: web.Request) -> web.Response:
 
 
 def _swap_flags(d: date, a: int, b: int) -> None:
-    """Після зміни номерів прапорці (скасовано / очно) йдуть за уроком, а час і дострокове завершення скидаються."""
     ca = cancellations.get_cancelled_numbers(d)
     a_c, b_c = a in ca, b in ca
     a_p, b_p = remote_overrides.is_in_person(d, a), remote_overrides.is_in_person(d, b)
@@ -498,7 +491,7 @@ async def a_renumber(request: web.Request) -> web.Response:
     rmap = renumber.get_map(d)
     inv = {v: k for k, v in rmap.items()}
     rmap[inv.get(cur, cur)] = tgt
-    if tgt in current:  # слот зайнятий - уроки міняються місцями
+    if tgt in current:
         rmap[inv.get(tgt, tgt)] = cur
     renumber.set_map(d, {k: v for k, v in rmap.items() if k != v})
     _swap_flags(d, cur, tgt)
@@ -590,6 +583,43 @@ async def a_report(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+# --- Нові эндпоінти керування журналом тривог ---
+
+async def a_alert_edit(request: web.Request) -> web.Response:
+    _need_admin(request)
+    b = await request.json()
+    index = int(b["index"])
+    start = str(b["start"]).strip() if "start" in b and b["start"] else None
+    end = str(b["end"]).strip() if "end" in b and b["end"] else None
+    level = str(b["level"]).strip() if "level" in b and b["level"] else None
+    is_false = bool(b["is_false"]) if "is_false" in b else None
+
+    success = alert_log.update_entry(index, start=start, end=end, level=level, is_false=is_false)
+    if not success:
+        raise ValueError("index")
+    return web.json_response({"ok": True})
+
+
+async def a_alert_false(request: web.Request) -> web.Response:
+    _need_admin(request)
+    b = await request.json()
+    index = int(b["index"])
+    success = alert_log.toggle_false_flag(index)
+    if not success:
+        raise ValueError("index")
+    return web.json_response({"ok": True})
+
+
+async def a_alert_delete(request: web.Request) -> web.Response:
+    _need_admin(request)
+    b = await request.json()
+    index = int(b["index"])
+    success = alert_log.delete_entry(index)
+    if not success:
+        raise ValueError("index")
+    return web.json_response({"ok": True})
+
+
 async def start(bot, watcher) -> web.AppRunner:
     app = web.Application(middlewares=[cors])
     app["bot"], app["watcher"] = bot, watcher
@@ -613,6 +643,12 @@ async def start(bot, watcher) -> web.AppRunner:
     app.router.add_get("/api/admin/overview", a_overview)
     app.router.add_post("/api/admin/announce", a_announce)
     app.router.add_post("/api/report", a_report)
+
+    # Реєстрація нових роутів для тривог
+    app.router.add_post("/api/admin/alert/edit", a_alert_edit)
+    app.router.add_post("/api/admin/alert/false", a_alert_false)
+    app.router.add_post("/api/admin/alert/delete", a_alert_delete)
+
     app.router.add_get("/", lambda r: web.Response(text="ok"))
     runner = web.AppRunner(app)
     await runner.setup()
