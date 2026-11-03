@@ -92,13 +92,16 @@ async def cors(request: web.Request, handler):
     return resp
 
 
-def _alert_block(watcher) -> dict:
-    hist = alert_log.recent(30)
+def _alert_block(watcher, admin: bool = False) -> dict:
+    hist = alert_log.recent(200)
     open_ = hist[0] if hist and hist[0]["end"] is None and watcher.is_active else None
     today = datetime.now(KYIV_TZ).date().isoformat()
-    n, mins = 0, 0
+    n, mins, false_n = 0, 0, 0
     for h in hist:
         if h["start"][:10] != today:
+            continue
+        if h.get("is_false"):
+            false_n += 1  # хибні тривоги не рахуємо в статистиці
             continue
         n += 1
         end = datetime.fromisoformat(h["end"]) if h["end"] else datetime.now(KYIV_TZ)
@@ -109,8 +112,8 @@ def _alert_block(watcher) -> dict:
         "since": open_["start"] if open_ else None,
         "last_ok": watcher.last_ok.isoformat(timespec="seconds") if watcher.last_ok else None,
         "region": config.REGION_TITLE,
-        "today": {"count": n, "minutes": mins},
-        "history": hist[:15],
+        "today": {"count": n, "minutes": mins, "false": false_n},
+        "history": hist[: 60 if admin else 15],
     }
 
 
@@ -210,7 +213,7 @@ async def state(request: web.Request) -> web.Response:
     n = max(1, min(int(request.query.get("days", "7")), MAX_DAYS))
     return web.json_response({
         "now": datetime.now(KYIV_TZ).isoformat(timespec="seconds"),
-        "alert": _alert_block(watcher),
+        "alert": _alert_block(watcher, admin=_admin(request) is not None),
         "alert_map": _alert_map_block(watcher),
         "days": {(start + timedelta(days=i)).isoformat(): _day_block(start + timedelta(days=i)) for i in range(n)},
         "lesson_names": _lesson_names(),
@@ -583,41 +586,68 @@ async def a_report(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
-# --- Нові эндпоінти керування журналом тривог ---
+# --- Керування журналом тривог (за стабільним id запису) ---
+
+def _bad(code: str) -> web.HTTPBadRequest:
+    return web.HTTPBadRequest(text=json.dumps({"error": code}), content_type="application/json")
+
+
+def _alert_entry(b: dict) -> dict:
+    entry = alert_log.get(str(b.get("id", "")))
+    if entry is None:
+        raise _bad("id")
+    return entry
+
 
 async def a_alert_edit(request: web.Request) -> web.Response:
     _need_admin(request)
     b = await request.json()
-    index = int(b["index"])
-    start = str(b["start"]).strip() if "start" in b and b["start"] else None
-    end = str(b["end"]).strip() if "end" in b and b["end"] else None
-    level = str(b["level"]).strip() if "level" in b and b["level"] else None
-    is_false = bool(b["is_false"]) if "is_false" in b else None
-
-    success = alert_log.update_entry(index, start=start, end=end, level=level, is_false=is_false)
-    if not success:
-        raise ValueError("index")
+    entry = _alert_entry(b)
+    ongoing = entry["end"] is None and request.app["watcher"].is_active
+    kwargs = {}
+    if b.get("start"):
+        kwargs["start"] = b["start"]
+    if b.get("level"):
+        kwargs["level"] = str(b["level"])
+    if "is_false" in b:
+        kwargs["is_false"] = bool(b["is_false"])
+    if "end" in b:
+        if ongoing and b["end"]:
+            raise _bad("active")  # поточну тривогу закриє відбій від API
+        if not ongoing and not b["end"]:
+            raise _bad("end")
+        if not ongoing:
+            kwargs["end"] = b["end"]
+    try:
+        alert_log.update(entry["id"], **kwargs)
+    except ValueError as e:
+        raise _bad(str(e))
     return web.json_response({"ok": True})
 
 
 async def a_alert_false(request: web.Request) -> web.Response:
     _need_admin(request)
-    b = await request.json()
-    index = int(b["index"])
-    success = alert_log.toggle_false_flag(index)
-    if not success:
-        raise ValueError("index")
-    return web.json_response({"ok": True})
+    entry = _alert_entry(await request.json())
+    return web.json_response({"ok": True, "is_false": alert_log.toggle_false(entry["id"])})
 
 
 async def a_alert_delete(request: web.Request) -> web.Response:
     _need_admin(request)
-    b = await request.json()
-    index = int(b["index"])
-    success = alert_log.delete_entry(index)
-    if not success:
-        raise ValueError("index")
+    entry = _alert_entry(await request.json())
+    if entry["end"] is None and request.app["watcher"].is_active:
+        raise _bad("active")
+    alert_log.delete(entry["id"])
     return web.json_response({"ok": True})
+
+
+async def a_alert_add(request: web.Request) -> web.Response:
+    _need_admin(request)
+    b = await request.json()
+    try:
+        entry = alert_log.add(b["start"], b["end"], str(b.get("level", "red")), bool(b.get("is_false", False)))
+    except ValueError as e:
+        raise _bad(str(e))
+    return web.json_response({"ok": True, "id": entry["id"]})
 
 
 async def start(bot, watcher) -> web.AppRunner:
@@ -648,6 +678,7 @@ async def start(bot, watcher) -> web.AppRunner:
     app.router.add_post("/api/admin/alert/edit", a_alert_edit)
     app.router.add_post("/api/admin/alert/false", a_alert_false)
     app.router.add_post("/api/admin/alert/delete", a_alert_delete)
+    app.router.add_post("/api/admin/alert/add", a_alert_add)
 
     app.router.add_get("/", lambda r: web.Response(text="ok"))
     runner = web.AppRunner(app)

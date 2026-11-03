@@ -315,9 +315,22 @@ const since=a=>a.since?Math.max(0,Math.floor((Date.now()-Date.parse(a.since))/6e
 
 function alertHistoryRows(history){
  const t=iso(kyiv()),y=iso(new Date(U(t)-D));
- return history.map((x, i)=>{const s=x.start,d=s.slice(0,10),e=x.end,dur=Math.max(0,Math.round(((e?Date.parse(e):Date.now())-Date.parse(s))/6e4));
-  return `<div class="box hl" ${admin?`data-alert-edit-idx="${i}" style="cursor:pointer"`:""}><div><b><i class="dot ${x.level==="red"?"red":""}"></i>${d===t?"Сьогодні":d===y?"Вчора":fd(d)}, ${s.slice(11,16)} – ${e?e.slice(11,16):"триває"}${x.is_false?" <span style='color:var(--rd)'>(хибна)</span>":""}</b><span class="sm">${x.level==="red"?"Червоний":x.level==="yellow"?"Жовтий":"Рівень невідомий"} рівень</span></div><div class="sm" style="display:flex;align-items:center;gap:6px"><span>${fm(dur)||"<1 хв"}</span>${admin?`<span style="color:var(--ac);font-size:12px">Змінити ›</span>`:""}</div></div>`
+ return history.map(x=>{const s=x.start,d=s.slice(0,10),e=x.end,dur=Math.max(0,Math.round(((e?Date.parse(e):Date.now())-Date.parse(s))/6e4));
+  const inner=`<div><b><i class="dot ${x.level==="red"?"red":""}"></i>${d===t?"Сьогодні":d===y?"Вчора":fd(d)}, ${s.slice(11,16)} – ${e?e.slice(11,16):"триває"}${x.is_false?` <span style="color:var(--rd)">(хибна)</span>`:""}</b><span class="sm">${x.level==="red"?"Червоний":x.level==="yellow"?"Жовтий":"Рівень невідомий"} рівень</span></div><div class="sm" style="display:flex;align-items:center;gap:6px"><span>${dur<1?"<1 хв":fm(dur)}</span>${admin?`<span style="color:var(--ac);font-size:12px">Змінити ›</span>`:""}</div>`;
+  const dim=x.is_false?"opacity:.6;":"";
+  return admin?`<button type="button" class="box hl" data-alert-id="${esc(x.id)}" style="width:100%;text-align:left;${dim}">${inner}</button>`:`<div class="box hl" style="${dim}">${inner}</div>`
  }).join("")
+}
+function openAlertSheet(entry){
+ const hm=d=>String(d.getUTCHours()).padStart(2,"0")+":"+String(d.getUTCMinutes()).padStart(2,"0"),now=kyiv(),ago=new Date(now.getTime()-3e6);
+ const isNew=!entry,e0=entry||{start:iso(ago)+"T"+hm(ago),end:iso(now)+"T"+hm(now),level:"red",is_false:false};
+ const ongoing=!isNew&&!e0.end&&st.alert.active,endV=e0.end||(iso(now)+"T"+hm(now));
+ sheet(`<h3 style="margin:0 0 4px;font-size:20px">${isNew?"Додати запис тривоги":"Запис тривоги"}</h3><div class="sm" style="margin-bottom:12px">${isNew?"Для тривоги, яку бот не зафіксував (наприклад, через простій). Час за Києвом.":"Час вказується за Києвом."}</div><label>Початок</label><div class="two"><input type="date" id="al-sd" value="${e0.start.slice(0,10)}"><div>${timeControl("al-st",e0.start.slice(11,16))}</div></div>${ongoing?`<div class="box sm">Тривога триває. Кінець проставиться автоматично після відбою.</div>`:`<label>Кінець</label><div class="two"><input type="date" id="al-ed" value="${endV.slice(0,10)}"><div>${timeControl("al-et",endV.slice(11,16))}</div></div>`}<label>Рівень</label>${appChoice("al-level",[["red","Червоний"],["yellow","Жовтий"]],e0.level||"red")}<label class="box hl" style="color:var(--tx);font-size:14px;text-transform:none;letter-spacing:0;margin:0 0 4px"><span>Хибна тривога<span class="sm" style="display:block;font-weight:400">Не враховується в статистиці за день</span></span><input type="checkbox" id="al-false" ${e0.is_false?"checked":""} style="width:22px;height:22px;margin:0"></label><button class="go" id="al-save">${isNew?"Додати":"Зберегти"}</button>${isNew?"":`<button class="go" id="al-del" style="background:var(--card);color:var(--rd)" ${ongoing?"disabled":""}>Видалити запис</button>`}`);
+ $("al-save").onclick=()=>{const sd=$("al-sd").value,stv=$("al-st").value,body={start:`${sd} ${stv}`,level:$("al-level").value||"red",is_false:$("al-false").checked};
+  if(!sd||!stv)return toast("Вкажіть початок");
+  if(!ongoing){const ed=$("al-ed").value,etv=$("al-et").value;if(!ed||!etv)return toast("Вкажіть кінець");body.end=`${ed} ${etv}`;if(body.end<body.start)return toast("Кінець має бути не раніше початку")}
+  closeSheet();act(()=>post(isNew?"/api/admin/alert/add":"/api/admin/alert/edit",isNew?body:{id:entry.id,...body}),isNew?"Запис додано":"Запис оновлено")};
+ if(!isNew)$("al-del").onclick=()=>{if(ongoing)return;if(!confirm("Видалити цей запис із історії тривог?"))return;closeSheet();act(()=>post("/api/admin/alert/delete",{id:entry.id}),"Запис видалено")}
 }
 
 function refreshAlertPage(){
@@ -344,7 +357,7 @@ async function loadAdmin(){try{admin=(await get("/api/me")).admin}catch(e){admin
 async function loadActivity(){try{adminActivity=await get("/api/admin/activity")}catch(e){adminActivity=null}}
 async function pingActivity(){if(!tg||!tg.initData)return;try{await post("/api/activity",{page:admin&&tab==="adm"?"adm":tab})}catch(e){}}
 async function loadAdminDay(){adminDate=adminDate||iso(kyiv());try{adminDay=(await get(`/api/state?from=${adminDate}&days=1`)).days[adminDate]}catch(e){adminDay=null}try{adminOv=await get("/api/admin/overview")}catch(e){adminOv=null}}
-const act=async(fn,ok)=>{try{await fn();toast(ok);await load();await loadAdminDay();render()}catch(x){toast("Помилка: "+(x===403?"немає прав":"спробуйте ще раз"))}};
+const act=async(fn,ok)=>{try{await fn();toast(ok);await load();await loadAdminDay();render()}catch(x){toast("Помилка: "+(x===403?"немає прав":x===400?"перевірте дані (кінець не раніше початку, початок не в майбутньому, поточну тривогу не змінити)":"спробуйте ще раз"))}};
 const undo=c=>c.kind==="cancel"?post("/api/admin/cancel",{date:c.date,number:c.number,subgroup:c.subgroup,cancel:false}):c.kind==="groupremote"?post("/api/admin/remote",{date:c.date,number:c.number,subgroup:c.subgroup,value:false}):c.kind==="time"?post("/api/admin/time",{date:c.date,number:c.number,clear:true}):c.kind==="early"?post("/api/admin/endnow",{date:c.date,number:c.number,clear:true}):c.kind==="inperson"?post("/api/admin/inperson",{date:c.date,number:c.number,value:false}):c.kind==="renumber"?post("/api/admin/renumber",{date:c.date,reset:true}):post("/api/admin/lesson",{date:c.date,number:c.number,remove:true});
 
 function banner(){const a=st.alert;return `<button class="ban ${a.active?cls(a):""}" data-go="al">${a.active?"🚨 "+lvl(a):"🟢 Тривоги немає"}<span>${a.active&&since(a)!==null?dur(since(a)):"Детальніше"}</span></button>`}
@@ -404,7 +417,7 @@ function alr(){
  h+=`<section class="alert-summary"><div id="alert-status" class="al ${a.active?cls(a):""}"><div class="k">${a.active?"Повітряна тривога":"Зараз"}</div><div class="t">${a.active?lvl(a):"Тривоги немає"}</div><div class="k">${a.active?(m!==null?"Триває "+(m<1?"менше хвилини":fm(m)):"Триває"):"Можна не поспішати в укриття"}</div></div><div id="alert-checked" class="alert-checked">${ago===null?"Ще не було перевірки":"Перевірено "+(ago<60?ago+" с":Math.floor(ago/60)+" хв")+" тому"}</div><div id="alert-stats" class="st"><div class="box"><span class="sm">Тривог сьогодні</span><b>${a.today.count}</b></div><div class="box"><span class="sm">Хвилин під тривогою</span><b>${a.today.minutes}</b></div></div></section>`;
  h+=`<div class="alert-section-title">Мапа <small>Україна · реальний час</small></div>`;
  h+=airMap();
- h+=`<div class="alert-section-title">Історія <small>${a.history.length} записів</small></div><div id="alert-history-empty" class="empty" ${a.history.length?"hidden":""}>Поки що записів немає. Бот почав вести журнал з моменту оновлення.</div><div id="alert-history-list">${alertHistoryRows(a.history)}</div></main>`;
+ h+=`<div class="alert-section-title">Історія <small>${a.history.length} записів</small></div>${admin?`<button type="button" class="b2" id="alert-add" style="width:100%;margin:0 0 10px">+ Додати запис тривоги</button>`:""}<div id="alert-history-empty" class="empty" ${a.history.length?"hidden":""}>Поки що записів немає. Бот почав вести журнал з моменту оновлення.</div><div id="alert-history-list">${alertHistoryRows(a.history)}</div></main>`;
  return h}
 function activityBlock(){
  const pageNames={sch:"Розклад",dut:"Чергові",al:"Тривоги",adm:"Керування"};
@@ -491,50 +504,8 @@ $("tabs").onclick=async e=>{const b=e.target.closest("button");if(!b)return;if(b
 const loadAdmin2=async()=>{await loadAdminDay();await loadActivity()};
 $("app").onclick=async e=>{const b=e.target.closest("button");if(!b)return;const D_=b.dataset;
  
- // Клик по записи в истории тревог для администратора
- const alertIdx = b.dataset.alertEditIdx;
- if(alertIdx !== undefined && admin){
-  const entry = st.alert.history[+alertIdx];
-  if(!entry) return;
-  sheet(`<h3 style="margin:0 0 8px">Керування записом тривоги</h3>
-         <div class="sm" style="margin-bottom:12px">Запис №${+alertIdx + 1} від ${entry.start.slice(0,10)}</div>
-         <label>Початок (YYYY-MM-DD HH:MM)</label>
-         <input id="al-start" value="${esc(entry.start)}">
-         <label>Кінець (YYYY-MM-DD HH:MM або порожньо)</label>
-         <input id="al-end" value="${esc(entry.end || "")}">
-         <label>Рівень</label>
-         <select id="al-level">
-           <option value="red" ${entry.level==="red"?"selected":""}>Червоний</option>
-           <option value="yellow" ${entry.level==="yellow"?"selected":""}>Жовтий</option>
-         </select>
-         <div style="margin:12px 0;display:flex;align-items:center;gap:8px">
-           <input type="checkbox" id="al-false" ${entry.is_false?"checked":""} style="width:20px;height:20px;margin:0">
-           <label for="al-false" style="margin:0;text-transform:none;font-size:14px;color:var(--tx)">Хибна тривога</label>
-         </div>
-         <button class="go" id="al-save-btn">Зберегти зміни</button>
-         <button class="go" id="al-false-btn" style="background:var(--card);color:var(--tx)">${entry.is_false?"Зняти мітку хибної":"Позначити хибною"}</button>
-         <button class="go" id="al-del-btn" style="background:var(--card);color:var(--rd)">Видалити запис</button>`);
-  
-  $("al-save-btn").onclick = async () => {
-   const start = $("al-start").value.trim();
-   const end = $("al-end").value.trim() || null;
-   const level = $("al-level").value;
-   const is_false = $("al-false").checked;
-   closeSheet();
-   await act(()=>post("/api/admin/alert/edit", {index: +alertIdx, start, end, level, is_false}), "Запис оновлено");
-  };
-  $("al-false-btn").onclick = async () => {
-   closeSheet();
-   await act(()=>post("/api/admin/alert/false", {index: +alertIdx}), "Статус хибної змінено");
-  };
-  $("al-del-btn").onclick = async () => {
-   if(!confirm("Видалити цей запис із історії тривог?")) return;
-   closeSheet();
-   await act(()=>post("/api/admin/alert/delete", {index: +alertIdx}), "Запис видалено");
-  };
-  return;
- }
-
+ if(D_.alertId!==undefined&&admin){const entry=st.alert.history.find(x=>x.id===D_.alertId);if(entry)openAlertSheet(entry);return}
+ if(b.id==="alert-add"&&admin){openAlertSheet(null);return}
  if(b.id==="report-error"){
   sheet(`<h3 style="margin:0 0 6px">Повідомити про помилку</h3><div class="sm" style="margin-bottom:10px">Опишіть, що відображається неправильно. Повідомлення побачать адміністратори.</div><textarea id="report-text" rows="4" maxlength="1000" placeholder="Наприклад: у розкладі на середу помилковий час уроку"></textarea><button class="go" id="report-send" data-action="send-report">Надіслати</button>`);
   return
