@@ -114,6 +114,7 @@ def _alert_block(watcher, admin: bool = False) -> dict:
         "region": config.REGION_TITLE,
         "today": {"count": n, "minutes": mins, "false": false_n},
         "history": hist[: 60 if admin else 15],
+        **({"months": alert_log.months()} if admin else {}),
     }
 
 
@@ -640,6 +641,16 @@ async def a_alert_delete(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def a_alert_clear(request: web.Request) -> web.Response:
+    _need_admin(request)
+    b = await request.json()
+    try:
+        removed, kept = alert_log.clear_month(str(b.get("month", "")), keep_open=request.app["watcher"].is_active)
+    except ValueError:
+        raise _bad("month")
+    return web.json_response({"ok": True, "removed": removed, "kept_ongoing": kept})
+
+
 async def a_alert_add(request: web.Request) -> web.Response:
     _need_admin(request)
     b = await request.json()
@@ -679,6 +690,7 @@ async def start(bot, watcher) -> web.AppRunner:
     app.router.add_post("/api/admin/alert/false", a_alert_false)
     app.router.add_post("/api/admin/alert/delete", a_alert_delete)
     app.router.add_post("/api/admin/alert/add", a_alert_add)
+    app.router.add_post("/api/admin/alert/clear", a_alert_clear)
 
     app.router.add_get("/", lambda r: web.Response(text="ok"))
     runner = web.AppRunner(app)

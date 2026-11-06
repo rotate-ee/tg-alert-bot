@@ -163,3 +163,30 @@ def delete(entry_id: str) -> None:
     if len(new) == len(data):
         raise KeyError("id")
     _save(new)
+
+
+def months() -> list:
+    """[{"month": "2026-10", "count": 7}] - від нових до старих (для очищення журналу по місяцях)."""
+    counts: dict[str, int] = {}
+    for e in _load():
+        counts[e["start"][:7]] = counts.get(e["start"][:7], 0) + 1
+    return [{"month": m, "count": c} for m, c in sorted(counts.items(), reverse=True)]
+
+
+def clear_month(month: str, keep_open: bool = True) -> tuple[int, bool]:
+    """Видаляє всі записи за місяць "YYYY-MM". Поточну (незакриту) тривогу лишає, якщо keep_open.
+    Повертає (скільки видалено, чи залишено поточну)."""
+    datetime.strptime(month, "%Y-%m")  # ValueError, якщо формат хибний
+    keep, removed, kept_open = [], 0, False
+    for e in _load():
+        if e["start"][:7] == month:
+            if keep_open and e["end"] is None:
+                keep.append(e)
+                kept_open = True
+                continue
+            removed += 1
+        else:
+            keep.append(e)
+    if removed:
+        _save(keep)
+    return removed, kept_open
