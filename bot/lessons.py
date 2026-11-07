@@ -8,7 +8,6 @@ from html import escape
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
-
 import bell_overrides
 import cancellations
 import config
@@ -30,10 +29,17 @@ def load_schedule() -> dict:
     with open(SCHEDULE_PATH, encoding="utf-8") as f:
         data = json.load(f)
     bells = {int(k): v for k, v in data["bells"].items()}
+    remote_bells = {int(k): v for k, v in data.get("remote_bells", {}).items()}
     days = {int(k): v for k, v in data["days"].items()}
     rooms = {int(k): v for k, v in data.get("rooms", {}).items()}
     remote_numbers = set(data.get("remote_lesson_numbers", []))
-    return {"bells": bells, "days": days, "rooms": rooms, "remote_numbers": remote_numbers}
+    return {
+        "bells": bells,
+        "remote_bells": remote_bells,
+        "days": days,
+        "rooms": rooms,
+        "remote_numbers": remote_numbers,
+    }
 
 
 def _parse_time(value: str) -> time:
@@ -102,7 +108,6 @@ def week_group(now: datetime) -> str:
     override = getattr(config, "WEEK_GROUP_OVERRIDE", "auto")
     if override in ("1_2", "3_4"):
         return override
-
     week_of_month = ((now.day - 1) // 7) + 1  # 1..5
     return "1_2" if week_of_month in (1, 2) else "3_4"
 
@@ -186,7 +191,6 @@ def _build_day_lessons(
             continue
         if name is None:
             continue  # в эту группу недель этого урока просто нет
-
         bell = bells.get(number)
         room_entry = room_entries[idx] if idx < len(room_entries) else None
         lessons.append({
@@ -236,7 +240,6 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
         day_entries, schedule["bells"], group, set(), schedule["remote_numbers"], room_entries
     )
     cancelled_groups = cancellations.get_cancelled_groups(today)
-
     # разова перенумерація (/api, міні-застосунок): урок переходить в інший
     # слот дзвінка; скасування і зміни часу далі рахуються за НОВИМИ номерами
     rmap = renumber.get_map(today)
@@ -252,7 +255,6 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
         lesson["cancelled"] = lesson["number"] in cancelled or (
             lesson.get("subgroup") in cancelled_groups.get(lesson["number"], set())
         )
-
     # разові зміни часу дзвінка (/settime, /endnow) - перекривають
     # стандартний час тільки для цього уроку і цієї дати
     for lesson in lessons:
@@ -260,6 +262,25 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
         if override:
             lesson["start"] = override["start"]
             lesson["end"] = override["end"]
+
+    # --- НОВЫЙ БЛОК: время в зависимости от дистанційно / очно ---
+    for lesson in lessons:
+        if bell_overrides.get_override(today, lesson["number"]):
+            continue  # ручной override важнее
+
+        remote_bell = schedule["remote_bells"].get(lesson["number"])
+        if not remote_bell:
+            continue
+
+        if is_lesson_remote_today(lesson, today):
+            lesson["start"] = remote_bell["start"]
+            lesson["end"] = remote_bell["end"]
+        else:
+            normal = schedule["bells"].get(lesson["number"])
+            if normal:
+                lesson["start"] = normal["start"]
+                lesson["end"] = normal["end"]
+    # -----------------------------------------------------------
 
     # одноразові додаткові уроки (/addlesson), яких немає в schedule.json
     for extra in extra_lessons.get_extra_lessons(today):
@@ -273,11 +294,9 @@ def get_today_lessons(now: datetime | None = None) -> list[dict]:
             "cancelled": extra["number"] in cancelled,
             "room": None,
         })
-
     # сортуємо за часом початку, щоб додаткові уроки стали на своє місце
     # (наприклад, 0-й урок раніше 11:25 з'явиться на початку списку)
     lessons.sort(key=lambda l: l["start"] or "99:99")
-
     return lessons
 
 
@@ -374,22 +393,18 @@ def format_week_message(now: datetime | None = None) -> str:
     """
     if now is None:
         now = datetime.now(KYIV_TZ)
-
     monday = now.date() - timedelta(days=now.weekday())
     if now.weekday() >= 5:  # 5=субота, 6=неділя
         monday += timedelta(days=7)
-
     blocks = []
     for offset in range(7):
         d = monday + timedelta(days=offset)
         lessons = _display_lessons(get_lessons_for_date(d))
         if not lessons:
             continue
-
         day_name = _DAY_NAMES[d.weekday()]
         is_today = d == now.date()
         header = f"📌 {day_name}, {d.strftime('%d.%m')}" + (" · сьогодні" if is_today else "")
-
         lines = [f"<b>{escape(header)}</b>"]
         for lesson in lessons:
             time_part = format_lesson_time(lesson, d)
@@ -399,37 +414,30 @@ def format_week_message(now: datetime | None = None) -> str:
                 f"<code>{lesson['number']:02d}</code>  <b>{escape(lesson['name'])}</b>"
                 f"\n       {escape(time_part + room_part + status + _format_subgroup_status(lesson, d))}"
             )
-
         blocks.append("\n".join(lines))
-
     title = f"📚 <b>Розклад на тиждень</b>\n{monday.strftime('%d.%m')} — {(monday + timedelta(days=4)).strftime('%d.%m')}"
     week_label = week_type_label(monday)
     if week_label:
         title += f"\n<i>{escape(week_label)}</i>"
-
     if not blocks:
         return f"{title}\n\nНа цей тиждень уроків немає."
-
     return title + "\n\n" + "\n\n".join(blocks)
 
 
 def find_current_and_next(now: datetime | None = None):
     """
     Возвращает (текущий_урок, следующий_урок, дистанційні_сьогодні,
-    скасовані_сьогодні) на момент `now`. Дистанційні уроки (без часу)
+    скасовані_сьогодні) на момент `now`. Дистанційні уроки (без времени)
     и скасовані уроки не участвуют в поиске "текущий/следующий".
     """
     if now is None:
         now = datetime.now(KYIV_TZ)
-
     today_lessons = _display_lessons(get_today_lessons(now))
     now_t = now.time()
-
     current = None
     upcoming = None
     remote_no_time_today = []
     cancelled_today = []
-
     for lesson in today_lessons:
         if lesson["cancelled"]:
             cancelled_today.append(lesson)
@@ -448,7 +456,6 @@ def find_current_and_next(now: datetime | None = None):
             current = lesson
         elif start > now_t and upcoming is None:
             upcoming = lesson
-
     return current, upcoming, remote_no_time_today, cancelled_today
 
 
@@ -460,9 +467,7 @@ def format_status_message(prefix: str, now: datetime | None = None) -> str:
     """
     if now is None:
         now = datetime.now(KYIV_TZ)
-
     current, upcoming, remote_no_time_today, cancelled_today = find_current_and_next(now)
-
     if current:
         body = (
             f"🟢 <b>Зараз іде {current['number']}-й урок</b>\n"
@@ -477,18 +482,15 @@ def format_status_message(prefix: str, now: datetime | None = None) -> str:
         )
     else:
         body = "✅ <b>На сьогодні уроків більше немає</b>"
-
     if remote_no_time_today:
         names = "\n".join(f"• {lesson['number']}-й урок — {escape(lesson['name'] + _format_subgroup_status(lesson, now.date()))}" for lesson in remote_no_time_today)
         body += f"\n\n🏠 <b>Дистанційні уроки без фіксованого часу</b>\n{names}"
-
     if cancelled_today:
         names = "\n".join(
             f"• {lesson['number']}-й урок — {escape(lesson['name'])}{escape(format_cancelled_status(lesson, now.date()) + _format_subgroup_status(lesson, now.date()))}"
             for lesson in cancelled_today
         )
         body += f"\n\n🚫 <b>Скасовані уроки сьогодні</b>\n{names}"
-
     return f"<b>{escape(prefix)}</b>\n\n{body}"
 
 
@@ -500,11 +502,9 @@ def format_day_schedule_message(prefix: str, now: datetime | None = None) -> str
     """
     if now is None:
         now = datetime.now(KYIV_TZ)
-
     today_lessons = _display_lessons(get_today_lessons(now))
     if not today_lessons:
         return None
-
     lines = []
     for lesson in today_lessons:
         time_part = format_lesson_time(lesson, now.date())
@@ -514,10 +514,8 @@ def format_day_schedule_message(prefix: str, now: datetime | None = None) -> str
             f"<code>{lesson['number']:02d}</code>  <b>{escape(lesson['name'])}</b>"
             f"\n       {escape(time_part + room_part + status + _format_subgroup_status(lesson, now.date()))}"
         )
-
     body = "\n".join(lines)
     week_label = week_type_label(now.date())
     if week_label:
         body = f"<i>{escape(week_label)}</i>\n\n{body}"
-
     return f"<b>{escape(prefix)}</b>\n\n{body}"
