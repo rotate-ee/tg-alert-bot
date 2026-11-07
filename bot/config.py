@@ -81,3 +81,12 @@ DUTY_START_DATE = os.getenv("DUTY_START_DATE", "2026-10-19").strip()
 # повідомлення адмінам про тип наступного тижня (школа/вдома).
 # Працює тільки якщо налаштовано SCHOOL_WEEK_ANCHOR_MONDAY. "off" - вимкнути.
 WEEK_TYPE_REMINDER_TIME = os.getenv("WEEK_TYPE_REMINDER_TIME", "19:00").strip()
+
+# Через скільки секунд без успішного опитування alerts.in.ua дані про тривоги
+# вважаються застарілими (бот попереджає адмінів, застосунок - усіх).
+ALERT_STALE_SECONDS = int(os.getenv("ALERT_STALE_SECONDS", "180"))
+
+# Резервна копія даних (JSON-файли з DATA_DIR) приходить адмінам у ЛС щонеділі
+# о цій годині (Europe/Kyiv, ЧЧ:ММ). "off" - вимкнути.
+BACKUP_TIME = os.getenv("BACKUP_TIME", "03:30").strip()
+

@@ -6,6 +6,7 @@ Telegram-бот: знает расписание уроков класса и п
     python bot/main.py
 """
 import asyncio
+import io
 from html import escape
 import logging
 import os
@@ -22,11 +23,14 @@ from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    BufferedInputFile,
     MenuButtonWebApp,
     Message,
     WebAppInfo,
 )
 
+import alert_stats
+import backup
 import bell_overrides
 import alert_notifications
 import cancellations
@@ -34,6 +38,7 @@ import config
 import early_end
 import extra_lessons
 import holidays
+import notify
 import remote_overrides
 import remote_lesson_overrides
 import settings
@@ -862,6 +867,148 @@ async def _flush_alert_message_deletions():
                 log.warning("Telegram не подтвердил удаление сообщения про тривогу %s; повторю попытку", message_id)
 
 
+async def notify_admins(text: str) -> None:
+    for admin_id in config.ADMIN_IDS:
+        try:
+            await bot.send_message(admin_id, text, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            log.warning("Не вдалося написати адміну %s: %s", admin_id, e)
+
+
+async def _personal_alert(event: str, level: str | None) -> None:
+    """Особисті сповіщення про тривогу тим, хто підписався в застосунку (незалежно від чату)."""
+    try:
+        if event == "ended":
+            text = format_status_message("🟢 Відбій повітряної тривоги")
+        else:
+            emoji, label = _level_emoji_and_label(level)
+            head = "Тривога" if event == "started" else "Рівень змінився"
+            text = f"{emoji} <b>{head} · {escape(config.REGION_TITLE)}</b>\n{escape(label)}"
+        await notify.send_to_subscribers(bot, "alerts", text)
+    except Exception:
+        log.exception("Помилка особистих сповіщень про тривогу")
+
+
+async def watch_staleness():
+    """Попереджає адмінів, якщо дані alert.in.ua давно не оновлювались (і коли знову ожили)."""
+    warned = False
+    while True:
+        await asyncio.sleep(30)
+        try:
+            seconds = alert_watcher.stale_seconds()
+            stale = seconds > config.ALERT_STALE_SECONDS
+            if stale and not warned:
+                warned = True
+                reason = escape(alert_watcher.last_error or "причина невідома")
+                await notify_admins(
+                    f"⚠️ <b>Дані про тривоги не оновлюються вже {seconds // 60} хв</b>\n{reason}\n\n"
+                    "Бот може не повідомити про тривогу. Перевіряйте офіційні джерела.")
+            elif not stale and warned:
+                warned = False
+                await notify_admins("✅ Дані про тривоги знову оновлюються.")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Помилка перевірки свіжості даних тривог")
+
+
+WEEKDAYS_UK = ["пн", "вт", "ср", "чт", "пт", "сб", "нд"]
+
+
+def _changes_text(date_iso: str, lines: list[str]) -> str:
+    d = date.fromisoformat(date_iso)
+    return (f"📝 <b>Зміни в розкладі · {d.strftime('%d.%m')} ({WEEKDAYS_UK[d.weekday()]})</b>\n"
+            + "\n".join(f"• {escape(line)}" for line in lines) + "\n\nДивіться застосунок: /app")
+
+
+async def changes_dispatcher():
+    """Збирає зміни розкладу з міні-застосунку і шле підписникам одним повідомленням."""
+    while True:
+        await asyncio.sleep(10)
+        try:
+            for date_iso, lines, _actors in notify.due_changes():
+                await notify.send_to_subscribers(bot, "changes", _changes_text(date_iso, lines))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Помилка розсилки змін розкладу")
+
+
+async def _send_backup(chat_id: int, caption: str) -> int:
+    payload, name, names = backup.make_zip()
+    await bot.send_document(chat_id, BufferedInputFile(payload, filename=name), caption=caption)
+    return len(names)
+
+
+async def weekly_backup():
+    """Щонеділі о BACKUP_TIME шле адмінам zip з усіма даними бота."""
+    parsed = None if config.BACKUP_TIME.lower() in ("off", "") else _parse_hhmm(config.BACKUP_TIME)
+    if not parsed:
+        return
+    last_sent: date | None = None
+    while True:
+        await asyncio.sleep(60)
+        try:
+            now = datetime.now(KYIV_TZ)
+            minutes = now.hour * 60 + now.minute - (parsed[0] * 60 + parsed[1])
+            if now.weekday() == 6 and 0 <= minutes < 30 and last_sent != now.date():
+                last_sent = now.date()
+                for admin_id in config.ADMIN_IDS:
+                    try:
+                        await _send_backup(admin_id, f"🗄 Щотижнева резервна копія ({now.strftime('%d.%m.%Y')}). Відновлення: надішліть цей zip боту з підписом /restore")
+                    except Exception as e:
+                        log.warning("Не вдалося надіслати резервну копію адміну %s: %s", admin_id, e)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Помилка щотижневої резервної копії")
+
+
+@dp.message(Command("backup"))
+async def cmd_backup(message: Message):
+    if not _is_allowed(message):
+        return
+    try:
+        count = await _send_backup(message.chat.id, "🗄 Резервна копія даних бота. Відновлення: надішліть цей zip боту з підписом /restore")
+        await message.answer(f"Готово: у архіві файлів: {count}.")
+    except Exception:
+        log.exception("Резервна копія")
+        await message.answer("Не вдалося створити резервну копію.")
+
+
+RESTORE_ERRORS = {
+    "too_big": "Файл завеликий (ліміт 5 МБ).",
+    "not_zip": "Це не zip-архів.",
+    "empty": "В архіві немає файлів.",
+    "bad_name": "В архіві є файли з недозволеними іменами (дозволені лише прості *.json).",
+    "bad_json": "Один із файлів не є коректним JSON.",
+}
+
+
+@dp.message(F.document, F.caption.startswith("/restore"))
+async def cmd_restore(message: Message):
+    if not _is_allowed(message):
+        return
+    doc = message.document
+    if (doc.file_size or 0) > backup.MAX_ZIP_BYTES:
+        return await message.answer(RESTORE_ERRORS["too_big"])
+    try:
+        buf = io.BytesIO()
+        await bot.download(doc, destination=buf)
+        payload = buf.getvalue()
+        backup.validate_zip(payload)  # лише перевірка, дані ще не змінено
+        # запобіжник: поточний стан повертаємо адміну ДО того, як щось перезаписати
+        await _send_backup(message.chat.id, "↩️ Копія стану ДО відновлення (на випадок, якщо архів виявився не тим)")
+        names = backup.restore_zip(payload)
+    except ValueError as e:
+        return await message.answer("❌ " + RESTORE_ERRORS.get(str(e), "Архів не підходить."))
+    except Exception:
+        log.exception("Відновлення з резервної копії")
+        return await message.answer("❌ Не вдалося відновити дані.")
+    alert_stats._cache.clear()
+    await message.answer(f"✅ Дані відновлено з архіву (файлів: {len(names)}). Зміни вже діють.")
+
+
 async def watch_alerts():
     pending_notifications: list[tuple[str, str | None]] = []
 
@@ -870,6 +1017,8 @@ async def watch_alerts():
             try:
                 event = await alert_watcher.poll_once(session)
                 should_notify = _alert_notifications_enabled()
+                if event == "ended" or (event in ("started", "level_changed") and config.NOTIFY_ON_START):
+                    asyncio.create_task(_personal_alert(event, alert_watcher.level))
 
                 if event == "ended" and should_notify:
                     pending_notifications.append(("ended", None))
@@ -932,6 +1081,9 @@ async def watch_alerts():
 async def main():
     await api.start(bot, alert_watcher)
     asyncio.create_task(watch_alerts())
+    asyncio.create_task(watch_staleness())
+    asyncio.create_task(changes_dispatcher())
+    asyncio.create_task(weekly_backup())
     asyncio.create_task(morning_digest())
     asyncio.create_task(lesson_reminders())
     asyncio.create_task(week_type_sunday_reminder())

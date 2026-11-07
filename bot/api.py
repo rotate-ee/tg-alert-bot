@@ -3,6 +3,7 @@ HTTP API для міні-застосунку (aiohttp): стан тривог, 
 Читання відкрите; адмін-дії вимагають заголовок X-Init-Data (Telegram initData),
 підпис якого перевіряється токеном бота, а user.id має бути в ADMIN_IDS.
 """
+import asyncio
 import hashlib
 import hmac
 import json
@@ -16,7 +17,9 @@ from zoneinfo import ZoneInfo
 from aiohttp import web
 
 import alert_log
+import alert_stats
 import activity
+import backup
 import bell_overrides
 import cancellations
 import config
@@ -26,6 +29,7 @@ import early_end
 import extra_lessons
 import holidays
 import lessons
+import notify
 import remote_overrides
 import remote_lesson_overrides
 import remote_periods
@@ -75,6 +79,72 @@ def _hhmm(raw: str) -> str:
     return f"{int(h):02d}:{int(m):02d}"
 
 
+CHANGE_PATHS = {
+    "/api/admin/cancel", "/api/admin/time", "/api/admin/lesson", "/api/admin/endnow",
+    "/api/admin/inperson", "/api/admin/remote", "/api/admin/renumber",
+    "/api/admin/holiday", "/api/admin/remote_period", "/api/admin/week_shift",
+}
+SUBGROUP_LABEL = {"girls": " (дівчата)", "boys": " (хлопці)"}
+
+
+def _fd(iso: str) -> str:
+    return f"{iso[8:10]}.{iso[5:7]}"
+
+
+def _lesson_label(d: date, number: int) -> str:
+    try:
+        name = next((l["name"] for l in lessons.get_lessons_for_date(d) if l["number"] == number), "")
+    except Exception:
+        name = ""
+    return f"{number}-й урок" + (f" ({name})" if name else "")
+
+
+def _describe_change(path: str, b: dict) -> tuple[str, str] | None:
+    """Короткий опис зміни розкладу для особистих сповіщень: (дата-ключ, рядок) або None."""
+    today = datetime.now(KYIV_TZ).date()
+    if path in ("/api/admin/holiday", "/api/admin/remote_period", "/api/admin/week_shift"):
+        if b.get("remove"):
+            what = {"/api/admin/holiday": "канікули", "/api/admin/remote_period": "дистанційний період",
+                    "/api/admin/week_shift": "чергування тижнів"}[path]
+            return today.isoformat(), f"Змінено {what}: дивіться застосунок"
+        if path == "/api/admin/holiday":
+            return b["from"], f"Канікули «{str(b.get('title', ''))[:40]}»: {_fd(b['from'])} – {_fd(b['to'])}"
+        if path == "/api/admin/remote_period":
+            return b["from"], f"Дистанційне навчання: {_fd(b['from'])} – {_fd(b['to'])}"
+        return b["from"], f"З {_fd(b['from'])} тиждень {'очний' if b.get('school') else 'дистанційний'}, далі чергуються"
+    d = _d(b["date"])
+    if not (today <= d <= today + timedelta(days=14)):
+        return None
+    n = b.get("number")
+    lab = _lesson_label(d, int(n)) if n is not None else ""
+    lab += SUBGROUP_LABEL.get(b.get("subgroup"), "")
+    if path == "/api/admin/cancel":
+        text = f"{lab}: скасовано" if b.get("cancel", True) else f"{lab}: знову проводиться"
+    elif path == "/api/admin/time":
+        text = f"{lab}: час за розкладом" if b.get("clear") else f"{lab}: нова година {b['start']}–{b['end']}"
+    elif path == "/api/admin/lesson":
+        text = f"додатковий урок {n} прибрано" if b.get("remove") else f"додано урок «{str(b.get('name', ''))[:40]}» {b['start']}–{b['end']}"
+    elif path == "/api/admin/endnow":
+        text = f"{lab}: дострокове завершення скасовано" if b.get("clear") else f"{lab}: закінчиться раніше" + (f" (о {b['time']})" if b.get("time") else "")
+    elif path == "/api/admin/inperson":
+        text = f"{lab}: очно" if b.get("value", True) else f"{lab}: дистанційно"
+    elif path == "/api/admin/remote":
+        text = f"{lab}: формат за розкладом" if b.get("clear") else (f"{lab}: дистанційно" if b.get("value", True) else f"{lab}: очно")
+    else:  # renumber
+        text = "нумерацію уроків скинуто" if b.get("reset") else "змінено номери уроків"
+    return d.isoformat(), text
+
+
+async def _record_change(request: web.Request) -> None:
+    try:
+        described = _describe_change(request.path, await request.json())
+        if described:
+            admin = _admin(request)
+            notify.record_change(described[0], described[1], admin["id"] if admin else None)
+    except Exception:
+        log.exception("Не вдалося записати зміну для сповіщень")
+
+
 @web.middleware
 async def cors(request: web.Request, handler):
     if request.method == "OPTIONS":
@@ -82,6 +152,8 @@ async def cors(request: web.Request, handler):
     else:
         try:
             resp = await handler(request)
+            if request.method == "POST" and request.path in CHANGE_PATHS and resp.status < 400:
+                await _record_change(request)
         except web.HTTPException as e:
             resp = e
         except (ValueError, KeyError, TypeError):
@@ -106,14 +178,27 @@ def _alert_block(watcher, admin: bool = False) -> dict:
         n += 1
         end = datetime.fromisoformat(h["end"]) if h["end"] else datetime.now(KYIV_TZ)
         mins += max(0, int((end - datetime.fromisoformat(h["start"])).total_seconds() // 60))
+    seconds = watcher.stale_seconds() if hasattr(watcher, "stale_seconds") else 0
+    stale = seconds > config.ALERT_STALE_SECONDS
+
+    def with_hits(entry: dict) -> dict:
+        try:
+            return {**entry, "hit": alert_stats.lessons_hit(entry)}
+        except Exception:
+            log.exception("Не вдалося порахувати уроки під тривогою")
+            return entry
+
     return {
         "active": watcher.is_active,
         "level": watcher.level,
+        "stale": stale,
+        "stale_minutes": seconds // 60 if stale else 0,
+        **({"last_error": getattr(watcher, "last_error", None)} if admin else {}),
         "since": open_["start"] if open_ else None,
         "last_ok": watcher.last_ok.isoformat(timespec="seconds") if watcher.last_ok else None,
         "region": config.REGION_TITLE,
         "today": {"count": n, "minutes": mins, "false": false_n},
-        "history": hist[: 60 if admin else 15],
+        "history": [with_hits(h) for h in hist[: 60 if admin else 15]],
         **({"months": alert_log.months()} if admin else {}),
     }
 
@@ -225,8 +310,67 @@ async def state(request: web.Request) -> web.Response:
     })
 
 
+async def _bot_username(app: web.Application) -> str | None:
+    if app.get("bot_username"):
+        return app["bot_username"]
+    try:
+        app["bot_username"] = (await app["bot"].get_me()).username
+    except Exception:
+        return None
+    return app["bot_username"]
+
+
 async def me(request: web.Request) -> web.Response:
-    return web.json_response({"admin": _admin(request) is not None})
+    user = verify_init_data(request.headers.get("X-Init-Data", ""))
+    out = {"admin": bool(user and user.get("id") in config.ADMIN_IDS)}
+    if user:
+        out["subscription"] = notify.get_topics(int(user["id"]))
+        out["bot_username"] = await _bot_username(request.app)
+    return web.json_response(out)
+
+
+async def alert_stats_view(request: web.Request) -> web.Response:
+    data = await asyncio.get_running_loop().run_in_executor(None, alert_stats.compute)
+    return web.json_response(data)
+
+
+TOPIC_TITLES = {"alerts": "тривоги та відбій", "changes": "зміни в розкладі"}
+
+
+async def a_subscribe(request: web.Request) -> web.Response:
+    from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+    user = verify_init_data(request.headers.get("X-Init-Data", ""))
+    if not user:
+        raise web.HTTPForbidden(text=json.dumps({"error": "forbidden"}), content_type="application/json")
+    b = await request.json()
+    raw = b.get("topics", [])
+    if not isinstance(raw, list):
+        raise ValueError("topics")
+    topics = [t for t in notify.TOPICS if t in raw]
+    uid = int(user["id"])
+    if set(topics) - set(notify.get_topics(uid)):  # додається нова тема: перевіряємо, що бот може писати
+        text = "✅ <b>Особисті сповіщення увімкнено</b>\n" + "\n".join(f"• {TOPIC_TITLES[t]}" for t in topics)
+        try:
+            await request.app["bot"].send_message(uid, text, parse_mode="HTML")
+        except (TelegramForbiddenError, TelegramBadRequest):
+            raise web.HTTPConflict(text=json.dumps({"error": "start_bot"}), content_type="application/json")
+        except Exception:
+            raise web.HTTPBadGateway(text=json.dumps({"error": "send_failed"}), content_type="application/json")
+    return web.json_response({"ok": True, "topics": notify.set_topics(uid, topics, str(user.get("first_name", "")))})
+
+
+async def a_backup_send(request: web.Request) -> web.Response:
+    from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+    from aiogram.types import BufferedInputFile
+    user = _need_admin(request)
+    payload, name, names = backup.make_zip()
+    try:
+        await request.app["bot"].send_document(
+            user["id"], BufferedInputFile(payload, filename=name),
+            caption=f"🗄 Резервна копія даних бота ({len(names)} файлів). Відновлення: надішліть цей zip боту з підписом /restore")
+    except (TelegramForbiddenError, TelegramBadRequest):
+        raise web.HTTPConflict(text=json.dumps({"error": "start_bot"}), content_type="application/json")
+    return web.json_response({"ok": True, "files": len(names), "bytes": len(payload)})
 
 
 async def duty_schedule(request: web.Request) -> web.Response:
@@ -661,11 +805,14 @@ async def a_alert_add(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "id": entry["id"]})
 
 
-async def start(bot, watcher) -> web.AppRunner:
+def build_app(bot, watcher) -> web.Application:
     app = web.Application(middlewares=[cors])
     app["bot"], app["watcher"] = bot, watcher
     app.router.add_get("/api/state", state)
     app.router.add_get("/api/me", me)
+    app.router.add_get("/api/alert_stats", alert_stats_view)
+    app.router.add_post("/api/subscribe", a_subscribe)
+    app.router.add_post("/api/admin/backup/send", a_backup_send)
     app.router.add_get("/api/duties", duty_schedule)
     app.router.add_post("/api/activity", a_presence)
     app.router.add_get("/api/admin/activity", a_activity_stats)
@@ -693,6 +840,11 @@ async def start(bot, watcher) -> web.AppRunner:
     app.router.add_post("/api/admin/alert/clear", a_alert_clear)
 
     app.router.add_get("/", lambda r: web.Response(text="ok"))
+    return app
+
+
+async def start(bot, watcher) -> web.AppRunner:
+    app = build_app(bot, watcher)
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.getenv("PORT", "8080"))

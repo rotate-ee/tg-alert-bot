@@ -11,7 +11,7 @@ _data_dir = os.getenv("DATA_DIR")
 DATA_DIR = Path(_data_dir) if _data_dir else Path(__file__).parent / "data"
 DATA_PATH = DATA_DIR / "alert_log.json"
 DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-MAX_ENTRIES = 300
+MAX_ENTRIES = 3000
 LEVELS = ("red", "yellow")
 _KEEP = object()
 
@@ -97,6 +97,10 @@ def on_ended() -> None:
     if data and data[-1]["end"] is None:
         data[-1]["end"] = _now()
         _save(data)
+
+
+def all_entries() -> list:
+    return _load()
 
 
 def recent(n: int = 20) -> list:

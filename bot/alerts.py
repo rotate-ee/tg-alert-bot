@@ -32,6 +32,9 @@ class AlertWatcher:
         self._was_active = False  # состояние с предыдущего опроса
         self._level: str | None = None  # "red" | "yellow" | None
         self.last_ok: datetime | None = None  # час останнього успішного опитування
+        self.started_at = datetime.now(ZoneInfo("Europe/Kyiv"))
+        self.last_error: str | None = None  # причина останньої невдалої спроби
+        self.fail_count = 0  # скільки невдач поспіль
         self.active_alerts: list[dict] = []
 
     @property
@@ -43,6 +46,11 @@ class AlertWatcher:
     def level(self) -> str | None:
         """Поточний рівень тривоги ("red"/"yellow") або None, якщо тривоги немає."""
         return self._level
+
+    def stale_seconds(self) -> int:
+        """Скільки секунд минуло з останнього успішного опитування (або з запуску бота)."""
+        ref = self.last_ok or self.started_at
+        return max(0, int((datetime.now(ZoneInfo("Europe/Kyiv")) - ref).total_seconds()))
 
     async def _fetch_active_alerts(self, session: aiohttp.ClientSession) -> list[dict]:
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -89,8 +97,13 @@ class AlertWatcher:
         try:
             alerts = await self._fetch_active_alerts(session)
         except Exception as e:
+            self.fail_count += 1
+            self.last_error = f"{type(e).__name__}: {e}"[:200]
             log.warning("Не удалось получить статус тревоги: %s", e)
             return None
+
+        self.fail_count = 0
+        self.last_error = None
 
         self.last_ok = datetime.now(ZoneInfo("Europe/Kyiv"))
         self.active_alerts = alerts
