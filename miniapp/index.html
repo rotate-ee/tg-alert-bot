@@ -230,6 +230,91 @@ html:not([data-theme="light"]) .tabs{
 #season-decor-root{position:fixed;inset:0;z-index:5;overflow:hidden;pointer-events:none}.season-snow,.season-snow:after{position:fixed;inset:-100px 0 0;z-index:5;pointer-events:none;background-image:radial-gradient(2px 2px at 35px 55px,#fff9 98%,transparent),radial-gradient(1.5px 1.5px at 115px 155px,#fff9 98%,transparent),radial-gradient(2px 2px at 205px 95px,#fff8 98%,transparent),radial-gradient(1px 1px at 290px 205px,#fff9 98%,transparent),radial-gradient(1.5px 1.5px at 370px 40px,#fff8 98%,transparent);background-size:410px 270px;animation:snow-fall 16s linear infinite;opacity:.45}.season-snow:after{content:"";inset:-170px 0 0;background-position:60px 90px;background-size:530px 330px;animation-duration:24s;opacity:.55}@keyframes snow-fall{to{transform:translateY(270px)}}
 @media(prefers-reduced-motion:reduce){.season-snow,.season-snow:after{animation:none}}
 @media(max-width:360px){.tabs{gap:2px;padding-left:4px;padding-right:4px}.tabs button span{font-size:9.5px}.tabs .theme-toggle{flex:0 0 36px;min-width:36px;padding:6px 4px}}
+
+/* ===== Тривоги: новий дизайн (av-*) ===== */
+.av-seg{position:sticky;top:0;z-index:6;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;margin:0 0 14px;border-radius:16px;background:color-mix(in srgb,var(--surface) 86%,transparent);border:1px solid var(--line);backdrop-filter:blur(14px) saturate(1.4);-webkit-backdrop-filter:blur(14px) saturate(1.4)}
+.av-seg button{min-height:38px;border-radius:12px;font-weight:700;font-size:13.5px;color:var(--hint);transition:background .18s,color .18s,box-shadow .18s}
+.av-seg button.on{background:var(--card);color:var(--tx);box-shadow:0 2px 10px color-mix(in srgb,var(--tx) 12%,transparent)}
+.av-hero{position:relative;overflow:hidden;border-radius:24px;padding:20px;margin-bottom:12px;background:linear-gradient(160deg,color-mix(in srgb,var(--ok) 16%,var(--card)),var(--card) 70%);border:1px solid color-mix(in srgb,var(--ok) 30%,var(--line))}
+.av-hero.rd{color:#fff;background:linear-gradient(145deg,#b52a43,#ef5b68);border-color:transparent;box-shadow:0 14px 34px color-mix(in srgb,var(--rd) 30%,transparent)}
+.av-hero.yl{color:#fff;background:linear-gradient(145deg,#a2650d,#e3a22c);border-color:transparent;box-shadow:0 14px 34px color-mix(in srgb,var(--yl) 28%,transparent)}
+.av-hero-body{display:flex;gap:16px;align-items:center}
+.av-dot{flex:none;width:14px;height:14px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 6px color-mix(in srgb,var(--ok) 20%,transparent)}
+.av-hero.rd .av-dot,.av-hero.yl .av-dot{background:#fff;box-shadow:0 0 0 6px rgba(255,255,255,.22);animation:avpulse 2.4s ease-in-out infinite}
+@keyframes avpulse{50%{box-shadow:0 0 0 11px rgba(255,255,255,.07)}}
+.av-kicker{font-size:12.5px;font-weight:700;opacity:.78;letter-spacing:.02em}
+.av-title{font-size:clamp(27px,8vw,35px);font-weight:800;letter-spacing:-.045em;line-height:1.06;margin:3px 0 5px}
+.av-sub{font-size:14px;opacity:.88}
+.av-hero-foot{display:flex;justify-content:space-between;gap:10px;margin-top:18px;padding-top:12px;border-top:1px solid color-mix(in srgb,currentColor 15%,transparent);font-size:12.5px;opacity:.85}
+.av-stale{margin:-6px -6px 16px;padding:10px 12px;border-radius:14px;background:color-mix(in srgb,var(--rd) 15%,transparent);border:1px solid color-mix(in srgb,var(--rd) 42%,transparent);font-size:13px;font-weight:700}
+.av-hero.rd .av-stale,.av-hero.yl .av-stale{background:rgba(0,0,0,.22);border-color:rgba(255,255,255,.3)}
+.av-stale small{display:block;font-weight:500;opacity:.88;margin-top:3px;font-size:12.5px;line-height:1.4}
+.av-card{border-radius:22px;padding:16px;margin-bottom:12px;background:var(--card);border:1px solid var(--line)}
+.av-card-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:14px}
+.av-card-head b{font-size:15.5px;letter-spacing:-.02em}
+.av-card-head span,.av-card-head a{font-size:12.5px;color:var(--hint);text-decoration:none}
+.av-keys{display:flex;align-items:center;gap:5px}.av-keys i,.av-legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-left:6px}
+.av-keys i:first-child{margin-left:0}
+.av-keys .rd,.av-legend .rd{background:var(--rd)}.av-keys .yl{background:var(--yl)}.av-keys .ac{background:var(--ac)}.av-keys .ac2{background:color-mix(in srgb,var(--ac) 38%,transparent)}
+.av-24-track{position:relative;height:32px;border-radius:10px;background:var(--surface);overflow:hidden}
+.av-24-track.sm{height:14px;border-radius:5px}
+.av-24-track i{position:absolute;top:0;bottom:0;border-radius:3px}
+.av-24-track i.ls{top:5px;bottom:5px;background:color-mix(in srgb,var(--ac) 24%,transparent)}
+.av-24-track i.rd{background:var(--rd)}.av-24-track i.yl{background:var(--yl)}
+.av-24-track i.now{width:2px;top:0;bottom:0;border-radius:0;background:var(--tx);opacity:.75}
+.av-ticks{display:flex;justify-content:space-between;margin-top:7px;font-size:10.5px;color:var(--hint)}
+.av-legend{display:flex;gap:14px;margin-top:12px;font-size:12px;color:var(--hint)}
+.av-legend i{margin:0 6px 0 0;vertical-align:-1px}.av-legend .ls{background:color-mix(in srgb,var(--ac) 40%,transparent)}.av-legend .nw{width:2px;border-radius:0;background:var(--tx);height:11px}
+.av-map iframe{display:block;width:100%;height:340px;border:0;border-radius:14px;background:var(--surface)}
+.av-chips{display:flex;gap:6px;overflow-x:auto;margin:0 0 14px;padding-bottom:2px;scrollbar-width:none}.av-chips::-webkit-scrollbar{display:none}
+.av-chips button{flex:none;min-height:34px;padding:0 14px;border-radius:99px;background:var(--surface);border:1px solid var(--line);font-size:13px;font-weight:650;color:var(--hint);transition:background .18s,color .18s}
+.av-chips button.on{background:var(--ac);border-color:transparent;color:var(--act)}
+.av-day{display:flex;justify-content:space-between;align-items:baseline;margin:20px 4px 8px;font-size:12.5px;color:var(--hint)}
+.av-day:first-of-type{margin-top:4px}.av-day b{color:var(--tx);font-size:14px;letter-spacing:-.01em}
+.av-list{border-radius:18px;background:var(--card);border:1px solid var(--line);overflow:hidden}
+.av-row{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;text-align:left;border-top:1px solid var(--line);background:none}
+.av-row:first-child{border-top:0}button.av-row:active{background:var(--surface)}
+.av-bar{flex:none;width:4px;align-self:stretch;min-height:34px;border-radius:99px}.av-bar.rd{background:var(--rd)}.av-bar.yl{background:var(--yl)}
+.av-row-main{flex:1;min-width:0}.av-row-main b{display:block;font-size:15px;letter-spacing:-.015em}
+.av-row-main span{display:block;font-size:12.5px;color:var(--hint);margin-top:2px}
+.av-row-main em{display:block;font-style:normal;font-size:12px;color:var(--yl);margin-top:5px;font-weight:650;line-height:1.35}
+.av-row-side{flex:none;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--hint)}
+.av-row-side b{font-size:14px;font-weight:650;color:var(--tx)}.av-row-side .av-chev{color:var(--ac);font-size:18px;line-height:1}
+.av-row.is-false{opacity:.5}.av-row.is-false .av-row-main b{text-decoration:line-through}
+.av-more,.av-btn{display:block;width:100%;min-height:44px;margin:14px 0 0;border-radius:14px;background:var(--surface);border:1px solid var(--line);font-weight:700;font-size:14px;color:var(--ac)}
+.av-admin{margin:6px 0 2px}.av-empty{padding:34px 18px;border-radius:20px;border:1px dashed color-mix(in srgb,var(--hint) 34%,var(--line));text-align:center;color:var(--hint);line-height:1.5;font-size:14px}
+.av-kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.av-kpi{display:flex;flex-direction:column;gap:3px;padding:14px;border-radius:20px;background:var(--card);border:1px solid var(--line);min-width:0}
+.av-kpi span{font-size:12px;color:var(--hint);font-weight:650}.av-kpi b{font-size:29px;line-height:1.12;letter-spacing:-.045em;font-weight:800}
+.av-kpi small{display:flex;align-items:center;gap:6px;min-height:18px;font-size:12px;color:var(--hint)}
+.av-delta{font-style:normal;font-weight:750;font-size:11.5px;padding:2px 8px;border-radius:99px}
+.av-delta.up{color:var(--rd);background:color-mix(in srgb,var(--rd) 14%,transparent)}.av-delta.down{color:var(--ok);background:color-mix(in srgb,var(--ok) 16%,transparent)}.av-delta.eq{color:var(--hint);background:var(--surface)}
+.av-svg{display:block;width:100%;height:auto;touch-action:manipulation}.av-svg .gl{stroke:var(--line);stroke-width:1}.av-svg .ax{fill:var(--hint);font-size:9.5px}.av-svg .rc{fill:var(--tx);font-size:15px;font-weight:800;letter-spacing:-.03em}.av-svg .selbg{fill:var(--ac);opacity:.15}.av-svg .bar{cursor:pointer}
+.av-readout{display:flex;justify-content:space-between;gap:10px;margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--surface);font-size:13px}.av-readout b{letter-spacing:-.01em}.av-readout span{color:var(--hint);text-align:right}
+.av-clock{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.av-ring{flex:none;width:176px;height:176px;margin:0 auto}
+.av-clock-side{flex:1;min-width:120px;display:flex;flex-direction:column;gap:14px}.av-clock-side b{display:block;font-size:26px;letter-spacing:-.045em;line-height:1.1}.av-clock-side span{font-size:12.5px;color:var(--hint)}
+.av-week{display:flex;flex-direction:column;gap:7px}.av-week-axis,.av-week-row{display:grid;grid-template-columns:44px 1fr;gap:8px;align-items:center}.av-week-axis .av-ticks{margin:0}.av-week-row>span{font-size:12px;color:var(--hint);font-weight:600}
+.av-big{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.av-big b{font-size:34px;letter-spacing:-.05em;font-weight:800;line-height:1}.av-big span{font-size:13px;color:var(--hint)}
+.av-prog{height:8px;border-radius:99px;background:var(--surface);margin-top:12px;overflow:hidden}.av-prog i{display:block;height:100%;border-radius:99px;background:var(--yl)}
+.av-hbar{display:grid;grid-template-columns:minmax(78px,34%) 1fr 24px;gap:10px;align-items:center;margin:8px 0;font-size:13px}.av-hbar>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.av-hbar>div{height:8px;border-radius:99px;background:var(--surface);overflow:hidden}.av-hbar>div i{display:block;height:100%;border-radius:99px;background:var(--rd)}.av-hbar b{text-align:right;font-size:13px}
+.av-hbar.wide{grid-template-columns:minmax(78px,30%) 1fr 26px 74px}.av-hbar small{color:var(--hint);font-size:11.5px;text-align:right}
+.av-recs{display:grid;grid-template-columns:1fr 1fr;gap:10px}.av-recs .av-kpi{padding:12px;background:var(--surface);border:0}.av-recs .av-kpi b{font-size:21px}
+.av-note{margin:6px 4px 0;line-height:1.5}
+.av-switch{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0;border-top:1px solid var(--line);text-transform:none!important;letter-spacing:0!important;color:var(--tx)!important;font-size:15px!important;margin:0!important;cursor:pointer}
+.av-card .av-switch:first-of-type{border-top:0;padding-top:0}.av-switch b{display:block;font-size:15px;font-weight:650}.av-switch .sm{display:block;margin-top:2px;font-weight:400}
+.av-switch.box{padding:12px 14px!important;border:1px solid var(--line)!important}
+input.av-sw{appearance:none;-webkit-appearance:none;position:relative;flex:none;width:48px!important;min-width:48px;height:29px!important;min-height:29px!important;margin:0!important;padding:0!important;border-radius:99px;background:var(--surface);border:1px solid var(--line);transition:background .2s}
+input.av-sw::after{content:"";position:absolute;top:2px;left:2px;width:23px;height:23px;border-radius:50%;background:var(--hint);transition:transform .2s,background .2s}
+input.av-sw:checked{background:var(--ac);border-color:transparent}input.av-sw:checked::after{transform:translateX(19px);background:var(--act)}
+@media(max-width:360px){.av-hbar.wide{grid-template-columns:minmax(70px,30%) 1fr 22px}.av-hbar.wide small{display:none}.av-ring{width:150px;height:150px}}
+@media(min-width:760px){.av-map iframe{height:420px}}
+@media(prefers-reduced-motion:reduce){.av-hero .av-dot{animation:none!important}}
+.av-stale small{color:inherit!important}
+.av-card-head b{flex:1;min-width:0}.av-card-head span,.av-card-head a{flex:none;max-width:58%;text-align:right}
+.av-ring .ax{fill:var(--hint);font-size:9.5px}.av-ring .rc{fill:var(--tx);font-size:15px;font-weight:800;letter-spacing:-.03em}
+.av-kpi.t b{font-size:23px;line-height:1.2;padding:3px 0}
+.av-cmp{margin:-4px 4px 12px}
+.av-readout{flex-direction:column;gap:2px}.av-readout span{text-align:left}
 </style>
 </head>
 <body>
@@ -313,37 +398,155 @@ const cls=a=>!a.active?"":a.level==="yellow"?"yl":"rd";
 const dur=m=>m<1?"щойно":fm(m);
 const since=a=>a.since?Math.max(0,Math.floor((Date.now()-Date.parse(a.since))/6e4)):null;
 
-function alertHistoryRows(history){
- const t=iso(kyiv()),y=iso(new Date(U(t)-D));
- return history.map(x=>{const s=x.start,d=s.slice(0,10),e=x.end,dur=Math.max(0,Math.round(((e?Date.parse(e):Date.now())-Date.parse(s))/6e4));
-  const inner=`<div><b><i class="dot ${x.level==="red"?"red":""}"></i>${d===t?"Сьогодні":d===y?"Вчора":fd(d)}, ${s.slice(11,16)} – ${e?e.slice(11,16):"триває"}${x.is_false?` <span style="color:var(--rd)">(хибна)</span>`:""}</b><span class="sm">${x.level==="red"?"Червоний":x.level==="yellow"?"Жовтий":"Рівень невідомий"} рівень</span>${x.hit&&x.hit.length?`<span class="sm" style="display:block;margin-top:2px;color:var(--yl)">Перервала: ${x.hit.map(h=>`${h.number}-й ${esc(h.name)}`).join(", ")}</span>`:""}</div><div class="sm" style="display:flex;align-items:center;gap:6px"><span>${dur<1?"<1 хв":fm(dur)}</span>${admin?`<span style="color:var(--ac);font-size:12px">Змінити ›</span>`:""}</div>`;
-  const dim=x.is_false?"opacity:.6;":"";
-  return admin?`<button type="button" class="box hl" data-alert-id="${esc(x.id)}" style="width:100%;text-align:left;${dim}">${inner}</button>`:`<div class="box hl" style="${dim}">${inner}</div>`
- }).join("")
-}
 const MONTHS_UK=["січень","лютий","березень","квітень","травень","червень","липень","серпень","вересень","жовтень","листопад","грудень"];
 const monthLabel=m=>MONTHS_UK[+m.slice(5,7)-1]+" "+m.slice(0,4);
 const recWord=n=>n%10===1&&n%100!==11?"запис":(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20))?"записи":"записів";
+const alWord=n=>n%10===1&&n%100!==11?"тривога":(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20))?"тривоги":"тривог";
+const startWord=n=>n%10===1&&n%100!==11?"запуск":(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20))?"запуски":"запусків";
 const lessonWord=n=>n%10===1&&n%100!==11?"урок":(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20))?"уроки":"уроків";
-function barChart(vals,titles,height=64){const mx=Math.max(1,...vals);return `<div style="display:flex;align-items:flex-end;gap:2px;height:${height}px">${vals.map((v,i)=>`<div title="${esc(titles[i])}" style="flex:1;min-width:2px;height:${v?Math.max(6,Math.round(v/mx*100)):2}%;background:${v?"var(--ac)":"var(--line)"};border-radius:3px 3px 0 0"></div>`).join("")}</div>`}
-function statsBlock(){
- const S=alertStats,head=meta=>`<details id="alert-stats-block" class="admin-fold" ${statsOpen?"open":""}><summary>Статистика тривог<span class="fold-meta">${meta}</span></summary><div class="admin-fold-body">`;
- if(!S)return head("завантаження…")+`<div class="empty">Завантажуємо статистику…</div></div></details>`;
- const t=S.totals,d30=S.by_day,c30=d30.reduce((a,x)=>a+x.count,0),m30=d30.reduce((a,x)=>a+x.minutes,0);
- if(!t.count)return head("записів немає")+`<div class="empty">Поки що немає даних для статистики.</div></div></details>`;
- let h=head(`${c30} за 30 днів`);
- h+=`<div class="st"><div class="box"><span class="sm">Тривог за 30 днів</span><b>${c30}</b></div><div class="box"><span class="sm">Під тривогою за 30 днів</span><b style="font-size:20px">${m30?fm(m30):"0 хв"}</b></div><div class="box"><span class="sm">Найдовша</span><b style="font-size:20px">${fm(t.longest.minutes)}</b><span class="sm">${fd(t.longest.start.slice(0,10))}.${t.longest.start.slice(0,4)}</span></div><div class="box"><span class="sm">Нічних (22:00–06:00)</span><b>${t.night}</b></div></div>`;
- h+=`<div class="box" style="margin-top:8px"><b>Вплив на навчання</b><span class="sm" style="display:block;margin-top:4px">${S.lessons.hit?`Тривоги перервали ${S.lessons.hit} ${lessonWord(S.lessons.hit)} (${S.lessons.alerts_with_hits} з ${t.count} тривог), загалом втрачено ${fm(S.lessons.minutes)}.`:"Тривоги поки не перервали жодного уроку."}</span></div>`;
- h+=`<h2 style="margin:16px 0 8px;font-size:15px">Останні 30 днів</h2>`+barChart(d30.map(x=>x.count),d30.map(x=>`${fd(x.date)}: ${x.count} тривог, ${x.minutes} хв`))+`<div class="hl sm" style="margin-top:4px"><span>${fd(d30[0].date)}</span><span>${fd(d30[29].date)}</span></div>`;
- h+=`<h2 style="margin:16px 0 8px;font-size:15px">Година початку (за весь період)</h2>`+barChart(S.by_hour,S.by_hour.map((v,i)=>`${String(i).padStart(2,"0")}:00: ${v}`),56)+`<div class="hl sm" style="margin-top:4px"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>`;
- h+=`<h2 style="margin:16px 0 8px;font-size:15px">По місяцях</h2>`+S.by_month.map(m=>`<div class="box hl"><div><b>${monthLabel(m.month)}</b><span class="sm">${m.count} ${recWord(m.count)} · ${fm(m.minutes)||"0 хв"}</span></div><span class="sm" style="text-align:right">${m.lessons_hit?`перервано ${m.lessons_hit} ${lessonWord(m.lessons_hit)}`:"уроки не зачеплені"}</span></div>`).join("");
- return h+`<div class="sm" style="margin-top:8px">Хибні тривоги не враховуються (${t.false}). Дані за останні 12 місяців${t.since?", журнал веде облік з "+fd(t.since)+"."+t.since.slice(0,4):""}.</div></div></details>`}
+
+/* ===== Тривоги: розділи Зараз / Історія / Статистика ===== */
+let alertView="now",histFilter="all",histLimit=25,statsPeriod=30,statsSel=null,adminUsers=null;
+const pad2=n=>String(n).padStart(2,"0"),fmt=m=>fm(Math.max(0,Math.round(m))).trim(),hmm=x=>pad2(Math.floor(x/60))+":"+pad2(x%60);
+const MONTHS_GEN=["січня","лютого","березня","квітня","травня","червня","липня","серпня","вересня","жовтня","листопада","грудня"];
+const dayLabel=d=>`${DN[wd(U(d))]}, ${+d.slice(8)} ${MONTHS_GEN[+d.slice(5,7)-1]}`;
+const hrsLabel=h=>h>=24?`${Math.floor(h/24)} дн${h%24?" "+h%24+" год":""}`:`${h} год`;
+const minOf=x=>+x.slice(11,13)*60+ +x.slice(14,16);
+const posStyle=(a,b)=>`left:${(a/14.4).toFixed(2)}%;width:${Math.max(0.6,(b-a)/14.4).toFixed(2)}%`;
+const kpi=(label,value,sub,c="")=>`<div class="av-kpi ${c}"><span>${label}</span><b>${value}</b><small>${sub||""}</small></div>`;
+const fmtS=m=>{m=Math.max(0,Math.round(m));return m>=60?`${Math.floor(m/60)} г${m%60?" "+m%60+" хв":""}`:`${m} хв`};
+const TICKS=`<div class="av-ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>`;
+const levelName=l=>l==="red"?"Червоний":l==="yellow"?"Жовтий":"Невідомий";
+const alertMinutes=x=>Math.max(0,Math.round(((x.end?Date.parse(x.end):Date.now())-Date.parse(x.start))/6e4));
+
+function heroHtml(){
+ const a=st.alert,m=since(a),ago=a.last_ok?Math.floor((Date.now()-Date.parse(a.last_ok))/1e3):null;
+ const last=a.history.find(x=>x.end&&!x.is_false);
+ let sub;
+ if(a.active)sub=(m!==null?"Триває "+(m<1?"менше хвилини":fmt(m)):"Триває")+(a.since?` · з ${a.since.slice(11,16)}`:"");
+ else if(last){const g=(Date.now()-Date.parse(last.end))/6e4;sub=`Без тривог ${g<1?"менше хвилини":fmt(g)}`}
+ else sub="Журнал тривог поки порожній";
+ const checked=ago===null?"Ще не було перевірки":"Перевірено "+(ago<60?ago+" с":ago<3600?Math.floor(ago/60)+" хв":Math.floor(ago/3600)+" год")+" тому";
+ const stale=a.stale?`<div class="av-stale">⚠️ Дані про тривоги не оновлюються вже ${a.stale_minutes} хв<small>Статус може бути неактуальним, бот міг пропустити тривогу. Дивіться офіційну мапу нижче.${admin&&a.last_error?"<br>Причина: "+esc(a.last_error):""}</small></div>`:"";
+ return `<section id="av-hero" class="av-hero ${a.active?(a.level==="yellow"?"yl":"rd"):"ok"}">${stale}<div class="av-hero-body"><span class="av-dot"></span><div><div class="av-kicker">${a.active?"Повітряна тривога":esc(a.region)}</div><div class="av-title">${a.active?lvl(a):"Тривоги немає"}</div><div class="av-sub">${sub}</div></div></div><div class="av-hero-foot"><span>${checked}</span><span>Сьогодні: ${a.today.count} · ${fmt(a.today.minutes)}</span></div></section>`}
+
+function todayHtml(){
+ const a=st.alert,now=kyiv(),t=iso(now),cur=now.getUTCHours()*60+now.getUTCMinutes(),segs=[];
+ a.history.forEach(x=>{if(x.is_false)return;const sd=x.start.slice(0,10),ed=x.end?x.end.slice(0,10):t;if(sd>t||ed<t)return;
+  const s0=sd<t?0:minOf(x.start),e0=x.end?(ed>t?1440:minOf(x.end)):cur;segs.push({s:s0,e:Math.max(e0,s0+4),level:x.level})});
+ const day=st.days&&st.days[t],ls=(day&&!day.holiday&&!day.ended?day.lessons:[]).filter(l=>!l.cancelled&&l.start&&l.end);
+ const sum=a.today.count?`${a.today.count} ${alWord(a.today.count)} · ${fmt(a.today.minutes)}`:"тривог не було";
+ return `<section class="av-card"><div class="av-card-head"><b>Сьогодні</b><span>${sum}</span></div><div class="av-24-track">${ls.map(l=>`<i class="ls" style="${posStyle(mins(l.start),mins(F(l)))}"></i>`).join("")}${segs.map(g=>`<i class="${g.level==="yellow"?"yl":"rd"}" style="${posStyle(g.s,g.e)}"></i>`).join("")}<i class="now" style="left:${(cur/14.4).toFixed(2)}%"></i></div>${TICKS}<div class="av-legend"><span><i class="rd"></i>тривога</span>${ls.length?`<span><i class="ls"></i>уроки</span>`:""}<span><i class="nw"></i>зараз</span></div></section>`}
+
+function airMap(){return `<section class="av-card av-map"><div class="av-card-head"><b>Мапа тривог</b><a href="https://alerts.in.ua/" target="_blank" rel="noopener noreferrer">alerts.in.ua ↗</a></div><iframe id="alert-map-frame" src="https://alerts.in.ua/?embed" title="Мапа повітряних тривог" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="fullscreen"></iframe></section>`}
+
+function histRow(x){
+ const s=x.start,e=x.end,dur=alertMinutes(x);
+ const inner=`<i class="av-bar ${x.level==="yellow"?"yl":"rd"}"></i><div class="av-row-main"><b>${s.slice(11,16)} – ${e?e.slice(11,16):"триває"}</b><span>${levelName(x.level)} рівень${x.is_false?" · хибна":""}</span>${x.hit&&x.hit.length?`<em>Перервала: ${x.hit.map(h=>`${h.number}-й ${esc(h.name)}`).join(", ")}</em>`:""}</div><div class="av-row-side"><b>${dur<1?"<1 хв":fmt(dur)}</b>${admin?`<span class="av-chev">›</span>`:""}</div>`;
+ const c=`av-row${x.is_false?" is-false":""}`;
+ return admin?`<button type="button" class="${c}" data-alert-id="${esc(x.id)}">${inner}</button>`:`<div class="${c}">${inner}</div>`}
+function historyHtml(){
+ const f=histFilter,list=st.alert.history.filter(x=>f==="all"||x.level===f||(f==="lessons"&&x.hit&&x.hit.length));
+ if(!list.length)return `<div class="av-empty">${st.alert.history.length?"За цим фільтром записів немає.":"Поки що записів немає. Журнал заповнюється автоматично, коли бот фіксує тривогу."}</div>`;
+ const t=iso(kyiv()),y=iso(new Date(U(t)-D)),shown=list.slice(0,histLimit),groups=[];
+ shown.forEach(x=>{const d=x.start.slice(0,10);let g=groups[groups.length-1];if(!g||g.d!==d){g={d,items:[]};groups.push(g)}g.items.push(x)});
+ let h=groups.map(g=>{const real=g.items.filter(x=>!x.is_false),mn=real.reduce((q,x)=>q+alertMinutes(x),0);
+  return `<div class="av-day"><b>${g.d===t?"Сьогодні":g.d===y?"Вчора":dayLabel(g.d)}</b><span>${real.length} ${alWord(real.length)}${mn?" · "+fmt(mn):""}</span></div><div class="av-list">${g.items.map(histRow).join("")}</div>`}).join("");
+ if(list.length>shown.length)h+=`<button type="button" class="av-more" data-more>Показати ще ${list.length-shown.length}</button>`;
+ return h}
+function histToolbar(){return `<div class="av-chips">${[["all","Усі"],["red","Червоні"],["yellow","Жовті"],["lessons","На уроках"]].map(([k,n])=>`<button type="button" data-afilter="${k}" class="${k===histFilter?"on":""}">${n}</button>`).join("")}</div>`}
+function histAdminTools(){return `<div class="av-admin"><button type="button" class="av-btn" id="alert-add">+ Додати запис про тривогу</button></div>${clearMonthsBlock()}`}
+
+function refreshAlertPage(){
+ const off=$("alert-offline");if(off)off.hidden=!offline;
+ const hw=$("av-hero-wrap");if(hw)hw.innerHTML=heroHtml();
+ const tw=$("av-today-wrap");if(tw)tw.innerHTML=todayHtml();
+ const hl=$("av-history");if(hl)hl.innerHTML=historyHtml();
+}
+
+/* --- діаграми --- */
+function stackChart(items,c1,c2){
+ const W=340,H=146,L=26,R=4,T=8,B=22,pw=W-L-R,ph=H-T-B,n=items.length,mx=Math.max(3,...items.map(i=>i.a+i.b)),slot=pw/n,bw=Math.max(2,Math.min(18,slot*0.68));
+ const sel=statsSel&&items.some(i=>i.date===statsSel)?statsSel:(([...items].reverse().find(i=>i.a+i.b)||items[n-1]).date);
+ let g="";
+ [0,Math.round(mx/2),mx].forEach(v=>{const y=T+ph-ph*v/mx;g+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" class="gl"/><text x="${L-6}" y="${y+3}" class="ax" text-anchor="end">${v}</text>`});
+ items.forEach((d,i)=>{const x=L+i*slot+(slot-bw)/2,ha=ph*d.a/mx,hb=ph*d.b/mx;
+  g+=`<g data-bar="${d.date}" class="bar">${d.date===sel?`<rect x="${L+i*slot}" y="${T}" width="${slot}" height="${ph}" class="selbg"/>`:`<rect x="${L+i*slot}" y="${T}" width="${slot}" height="${ph}" fill="transparent"/>`}`;
+  if(d.a)g+=`<rect x="${x}" y="${T+ph-ha}" width="${bw}" height="${ha}" rx="2" fill="${c1}"/>`;
+  if(d.b)g+=`<rect x="${x}" y="${T+ph-ha-hb}" width="${bw}" height="${hb}" rx="2" fill="${c2}"/>`;
+  if(!d.a&&!d.b)g+=`<rect x="${x}" y="${T+ph-1.5}" width="${bw}" height="1.5" fill="var(--line)"/>`;
+  g+=`</g>`});
+ const lab=(i,anc)=>`<text x="${anc==="start"?L:anc==="end"?W-R:L+i*slot+slot/2}" y="${H-5}" class="ax" text-anchor="${anc}">${fd(items[i].date)}</text>`;
+ g+=lab(0,"start")+(n>8?lab(Math.floor(n/2),"middle"):"")+lab(n-1,"end");
+ return {svg:`<svg viewBox="0 0 ${W} ${H}" class="av-svg" role="img">${g}</svg>`,sel}}
+
+function clockRing(arr){
+ const mx=Math.max(1,...arr),c=90,ri=38,ro=68,pt=(r,deg)=>{const a=(deg-90)*Math.PI/180;return [c+r*Math.cos(a),c+r*Math.sin(a)]};
+ let g="";
+ arr.forEach((v,i)=>{const [x0,y0]=pt(ro,i*15+0.9),[x1,y1]=pt(ro,(i+1)*15-0.9),[x2,y2]=pt(ri,(i+1)*15-0.9),[x3,y3]=pt(ri,i*15+0.9);
+  g+=`<path d="M${x0.toFixed(2)} ${y0.toFixed(2)}A${ro} ${ro} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)}L${x2.toFixed(2)} ${y2.toFixed(2)}A${ri} ${ri} 0 0 0 ${x3.toFixed(2)} ${y3.toFixed(2)}Z" ${v?`fill="var(--rd)" fill-opacity="${(0.2+0.8*v/mx).toFixed(2)}"`:`fill="var(--line)"`}/>`});
+ [[0,"00"],[90,"06"],[180,"12"],[270,"18"]].forEach(([deg,t])=>{const [x,y]=pt(ro+11,deg);g+=`<text x="${x.toFixed(1)}" y="${(y+3).toFixed(1)}" class="ax" text-anchor="middle">${t}</text>`});
+ const peak=arr.indexOf(Math.max(...arr)),has=arr.some(v=>v);
+ g+=has?`<text x="${c}" y="${c-1}" class="rc" text-anchor="middle">${pad2(peak)}–${pad2((peak+1)%24)}</text><text x="${c}" y="${c+14}" class="ax" text-anchor="middle">пік · ${arr[peak]}</text>`:`<text x="${c}" y="${c+4}" class="ax" text-anchor="middle">немає даних</text>`;
+ return `<svg viewBox="0 0 180 180" class="av-ring" role="img">${g}</svg>`}
+
+function weekStrip(S){
+ return `<div class="av-week"><div class="av-week-axis"><span></span>${TICKS}</div>${S.week.map(w=>`<div class="av-week-row"><span>${DN[wd(U(w.date))]} ${+w.date.slice(8)}</span><div class="av-24-track sm">${w.segments.map(g=>`<i class="${g.level==="yellow"?"yl":"rd"}" style="${posStyle(g.s,g.e)}"></i>`).join("")}</div></div>`).join("")}</div>`}
+
+function statsViewHtml(){
+ const S=alertStats;
+ if(!S)return `<div class="av-empty">Завантажуємо статистику…</div>`;
+ const t=S.totals;
+ if(!t.count)return `<div class="av-empty">Поки що немає даних для статистики.</div>`;
+ const n=statsPeriod,days=S.by_day.slice(-n),prev=S.by_day.slice(-2*n,-n),sum=(arr,k)=>arr.reduce((q,x)=>q+x[k],0);
+ const cur={count:sum(days,"count"),minutes:sum(days,"minutes"),night:sum(days,"night")};
+ const hasPrev=t.since&&prev.length===n&&t.since<=prev[0].date,pv=hasPrev?{count:sum(prev,"count"),minutes:sum(prev,"minutes")}:null;
+ const delta=(c,p,f)=>p===null?"":c===p?`<i class="av-delta eq">без змін</i>`:`<i class="av-delta ${c>p?"up":"down"}">${c>p?"▲ +":"▼ −"}${f(Math.abs(c-p))}</i>`;
+ const chart=stackChart(days.map(d=>({date:d.date,a:d.red,b:d.yellow})),"var(--rd)","var(--yl)"),sd=days.find(d=>d.date===chart.sel);
+ const L_=S.lessons,share=t.count?Math.round(L_.alerts_with_hits/t.count*100):0,subj=S.subjects||[],smax=Math.max(1,...subj.map(x=>x.count)),r=S.records;
+ const mmax=Math.max(1,...S.by_month.map(m=>m.minutes));
+ let h=`<div class="av-chips">${[[7,"7 днів"],[30,"30 днів"],[90,"90 днів"]].map(([k,nm])=>`<button type="button" data-period="${k}" class="${k===n?"on":""}">${nm}</button>`).join("")}</div>`;
+ h+=`<div class="av-kpis">${kpi("Тривог",cur.count,delta(cur.count,pv&&pv.count,x=>x))}${kpi("Під тривогою",fmtS(cur.minutes),delta(cur.minutes,pv&&pv.minutes,fmtS),"t")}${kpi("Середня тривалість",cur.count?fmtS(cur.minutes/cur.count):"—","одна тривога","t")}${kpi("Нічні (22–06)",cur.night,cur.count?Math.round(cur.night/cur.count*100)+"% від усіх":"—")}</div>${pv?`<div class="sm av-cmp">Зміна — порівняно з попередніми ${n} днями</div>`:""}`;
+ h+=`<section class="av-card"><div class="av-card-head"><b>Динаміка</b><span class="av-keys"><i class="rd"></i>червоні <i class="yl"></i>жовті</span></div>${chart.svg}<div class="av-readout"><b>${dayLabel(chart.sel)}</b><span>${sd.count?`${sd.count} ${alWord(sd.count)} · ${fmt(sd.minutes)}${sd.night?" · нічних "+sd.night:""}`:"тривог не було"}</span></div></section>`;
+ const hrs=S.hours[String(n)]||S.by_hour,total=hrs.reduce((q,x)=>q+x,0),nightShare=total?Math.round((hrs.slice(22).reduce((q,x)=>q+x,0)+hrs.slice(0,6).reduce((q,x)=>q+x,0))/total*100):0;
+ h+=`<section class="av-card"><div class="av-card-head"><b>Година доби</b><span>початок тривоги</span></div><div class="av-clock">${clockRing(hrs)}<div class="av-clock-side"><div><b>${total}</b><span>${alWord(total)} за ${n} днів</span></div><div><b>${nightShare}%</b><span>припали на ніч</span></div></div></div></section>`;
+ h+=`<section class="av-card"><div class="av-card-head"><b>Останні 7 днів</b><span>по годинах</span></div>${weekStrip(S)}</section>`;
+ h+=`<section class="av-card"><div class="av-card-head"><b>Вплив на навчання</b><span>за весь період</span></div>${L_.hit?`<div class="av-big"><b>${L_.hit}</b><span>${lessonWord(L_.hit)} перервано · втрачено ${fmt(L_.minutes)}</span></div><div class="av-prog"><i style="width:${share}%"></i></div><div class="sm" style="margin:6px 0 14px">${share}% тривог (${L_.alerts_with_hits} з ${t.count}) припали на час уроків</div>${subj.map(x=>`<div class="av-hbar"><span>${esc(x.name)}</span><div><i style="width:${Math.round(x.count/smax*100)}%"></i></div><b>${x.count}</b></div>`).join("")}`:`<div class="sm">Тривоги поки не перервали жодного уроку.</div>`}</section>`;
+ h+=`<section class="av-card"><div class="av-card-head"><b>Рекорди</b></div><div class="av-recs">${r.longest?kpi("Найдовша тривога",fmtS(r.longest.minutes),fd(r.longest.start.slice(0,10))+"."+r.longest.start.slice(0,4)):""}${r.calm_longest_hours!==null?kpi("Найдовша тиша",hrsLabel(r.calm_longest_hours),"між тривогами"):""}${r.busiest_day?kpi("Найгарячіший день",r.busiest_day.count+" "+alWord(r.busiest_day.count),dayLabel(r.busiest_day.date)):""}${kpi("Зараз без тривог",st.alert.active?"триває":(r.calm_current_hours!==null?hrsLabel(r.calm_current_hours):"—"),st.alert.active?"йде тривога":"від останньої")}</div></section>`;
+ h+=`<section class="av-card"><div class="av-card-head"><b>По місяцях</b></div>${S.by_month.map(m=>`<div class="av-hbar wide"><span>${monthLabel(m.month)}</span><div><i style="width:${Math.max(3,Math.round(m.minutes/mmax*100))}%"></i></div><b>${m.count}</b><small>${m.lessons_hit?"−"+m.lessons_hit+" "+lessonWord(m.lessons_hit):"уроки цілі"}</small></div>`).join("")}</section>`;
+ return h+`<div class="sm av-note">Хибні тривоги не враховуються (${t.false}). Дані за останні 12 місяців${t.since?", журнал веде облік з "+fd(t.since)+"."+t.since.slice(0,4):""}. Натисніть на стовпчик, щоб побачити день.</div>`}
+
+function alr(){
+ const a=st.alert;
+ let h=`<main class="alerts-page"><div class="top"><div><h1>Тривоги</h1><small>${esc(a.region)}</small></div></div><div id="alert-offline" class="box sm" ${offline?"":"hidden"}>Немає зв'язку з ботом. Дані можуть бути застарілими.</div>`;
+ h+=`<nav class="av-seg" role="tablist">${[["now","Зараз"],["hist","Історія"],["stats","Статистика"]].map(([k,nm])=>`<button type="button" role="tab" data-aview="${k}" aria-selected="${k===alertView}" class="${k===alertView?"on":""}">${nm}</button>`).join("")}</nav>`;
+ if(alertView==="now")h+=`<div id="av-hero-wrap">${heroHtml()}</div><div id="av-today-wrap">${todayHtml()}</div>${airMap()}`;
+ else if(alertView==="hist")h+=histToolbar()+`<div id="av-history">${historyHtml()}</div>`+(admin?histAdminTools():"");
+ else h+=statsViewHtml();
+ return h+`</main>`}
+
+/* ===== Адмінка: користувачі, запуски бота, розсилка ===== */
+async function loadAdminUsers(){try{adminUsers=await get("/api/admin/users")}catch(e){adminUsers=null}}
+function usersFold(){
+ const U_=adminUsers,head=m=>`<details class="admin-fold"><summary>Користувачі та запуски<span class="fold-meta">${m}</span></summary><div class="admin-fold-body">`;
+ if(!U_)return head("не завантажено")+`<div class="box sm">Не вдалося завантажити статистику користувачів.</div></div></details>`;
+ const t=U_.stats.totals,days=U_.stats.by_day,chart=stackChart(days.map(d=>({date:d.date,a:d.new,b:d.starts-d.new})),"var(--ac)","color-mix(in srgb,var(--ac) 38%,transparent)"),sd=days.find(d=>d.date===chart.sel);
+ let h=head(`+${t.new_7} за 7 дн.`);
+ h+=`<div class="av-kpis">${kpi("Запустили бота",t.started,"унікальних користувачів")}${kpi("Нові за 7 днів",t.new_7,`${t.starts_7} запусків усього`)}${kpi("Нові за 30 днів",t.new_30,`${t.starts_30} запусків усього`)}${kpi("Заблокували бота",t.blocked,`доступні для ЛС: ${t.reachable}`)}</div>`;
+ h+=`<section class="av-card"><div class="av-card-head"><b>Запуски по днях</b><span class="av-keys"><i class="ac"></i>нові <i class="ac2"></i>повторні</span></div>${chart.svg}<div class="av-readout"><b>${dayLabel(chart.sel)}</b><span>${sd.starts?`${sd.starts} ${startWord(sd.starts)}, нових: ${sd.new}`:"запусків не було"}</span></div></section>`;
+ h+=`<div class="av-card-head" style="margin:14px 2px 8px"><b>Останні запуски</b></div>`+(U_.stats.recent.length?`<div class="av-list">${U_.stats.recent.map(x=>`<div class="av-row"><div class="av-row-main"><b>${esc(x.name)}${x.username?` <small style="font-weight:500;color:var(--hint)">@${esc(x.username)}</small>`:""}</b><span>${fd(x.at.slice(0,10))} о ${x.at.slice(11,16)}</span></div><div class="av-row-side">${x.new?`<b style="color:var(--ok)">новий</b>`:`<span style="color:var(--hint)">повторно</span>`}</div></div>`).join("")}</div>`:`<div class="box sm">Запусків поки немає. Статистика збирається з моменту оновлення.</div>`);
+ return h+`<div class="sm" style="margin:10px 2px 0">Рахуються натискання Start у чаті з ботом. Користувачі, які лише відкривали застосунок, додані в реєстр, але можуть не отримувати ЛС.</div></div></details>`}
+function broadcastFold(){
+ const aud=adminUsers?adminUsers.audience:{all:0,subscribers:0},hist=adminUsers?adminUsers.broadcasts:[];
+ return `<details class="admin-fold"><summary>Розсилка в ЛС<span class="fold-meta">${aud.all} отримувачів</span></summary><div class="admin-fold-body"><label for="bc-text">Текст повідомлення</label><textarea id="bc-text" rows="5" maxlength="3500" placeholder="Що потрібно повідомити всім, хто запускав бота"></textarea><div class="sm" id="bc-count" style="margin:-4px 2px 10px;text-align:right">0 / 3500</div><label>Кому</label>${appChoice("bc-aud",[["all",`Усі, кому можна написати (${aud.all})`],["subscribers",`Лише підписники сповіщень (${aud.subscribers})`]],"all")}<label class="box hl av-switch" style="margin-top:12px"><span><b>Кнопка «Відкрити застосунок»</b><span class="sm" style="display:block;font-weight:400">Під повідомленням</span></span><input type="checkbox" class="av-sw" id="bc-btn" checked></label><div class="two" style="margin-top:12px"><button type="button" class="b2" id="bc-test">Тест собі</button><button type="button" class="go" id="bc-send" style="margin:0">Надіслати</button></div>${hist.length?`<div class="av-card-head" style="margin:16px 2px 8px"><b>Останні розсилки</b></div><div class="av-list">${hist.map(x=>`<div class="av-row"><div class="av-row-main"><b>${esc(x.text.length>46?x.text.slice(0,46)+"…":x.text)}</b><span>${fd(x.time.slice(0,10))} о ${x.time.slice(11,16)} · ${x.audience==="all"?"усім":"підписникам"}</span></div><div class="av-row-side"><b>${x.sent}/${x.total}</b>${x.blocked?`<span style="color:var(--rd)">−${x.blocked}</span>`:""}</div></div>`).join("")}</div>`:""}<div class="sm" style="margin:10px 2px 0">Повідомлення надсилається як є, без форматування. Хто не натискав Start або заблокував бота, не отримає його, а бот запам'ятає це і більше не писатиме.</div></div></details>`}
+document.addEventListener("input",e=>{if(e.target&&e.target.id==="bc-text"){const c=$("bc-count");if(c)c.textContent=e.target.value.length+" / 3500"}});
+
 function clearMonthsBlock(){const ms=st.alert.months||[];
  return `<details class="admin-fold" style="margin-top:14px"><summary>Очищення історії<span class="fold-meta">${ms.length?ms.length+" міс.":"записів немає"}</span></summary><div class="admin-fold-body">${ms.length?ms.map(m=>`<div class="box hl"><div><b>${monthLabel(m.month)}</b><span class="sm">${m.count} ${recWord(m.count)}</span></div><button type="button" class="b2 rd" data-clear-month="${m.month}">Очистити</button></div>`).join(""):`<div class="box sm">Історія порожня</div>`}</div></details>`}
 function notifyCard(){
  if(!tg||!tg.initData||st.err||st.maintenance)return "";
- const row=(t,title,hint)=>`<label class="box hl" style="color:var(--tx);font-size:15px;text-transform:none;letter-spacing:0;margin:0 0 8px"><span><b>${title}</b><span class="sm" style="display:block;font-weight:400">${hint}</span></span><input type="checkbox" data-sub="${t}" ${mySub.includes(t)?"checked":""} style="width:22px;height:22px;margin:0"></label>`;
- return `<div class="alert-section-title" style="margin-top:22px">Особисті сповіщення <small>у приватні повідомлення</small></div>${row("alerts","Тривоги та відбій","Одразу, цілодобово")}${row("changes","Зміни в розкладі","Одним повідомленням, коли адмін змінює уроки")}<div class="sm" style="margin:0 2px 8px">Щоб бот міг вам писати, один раз натисніть Start у чаті з ботом.</div>`}
+ const row=(t,title,hint)=>`<label class="av-switch"><span><b>${title}</b><span class="sm">${hint}</span></span><input type="checkbox" class="av-sw" data-sub="${t}" ${mySub.includes(t)?"checked":""}></label>`;
+ return `<section class="av-card" style="margin-top:14px"><div class="av-card-head"><b>Особисті сповіщення</b><span>в ЛС бота</span></div>${row("alerts","Тривоги та відбій","Одразу, цілодобово")}${row("changes","Зміни в розкладі","Одним повідомленням, коли адмін змінює уроки")}<div class="sm" style="margin-top:8px">Щоб бот міг вам писати, один раз натисніть Start у чаті з ботом.</div></section>`}
 async function setSubscription(){
  if(subBusy)return;subBusy=true;
  const boxes=[...document.querySelectorAll("[data-sub]")];boxes.forEach(x=>x.disabled=true);
@@ -369,21 +572,6 @@ function openAlertSheet(entry){
  if(!isNew)$("al-del").onclick=async()=>{if(ongoing||actBusy)return;if(!await askConfirm("Видалити цей запис із історії тривог?"))return;closeSheet();act(()=>post("/api/admin/alert/delete",{id:entry.id}),"Запис видалено")}
 }
 
-const staleHtml=a=>`⚠️ <b>Дані про тривоги не оновлюються вже ${a.stale_minutes} хв.</b><span class="sm" style="display:block;margin-top:4px">Статус нижче може бути неактуальним, бот міг пропустити тривогу. Орієнтуйтесь на офіційну мапу.${admin&&a.last_error?"<br>Причина: "+esc(a.last_error):""}</span>`;
-function refreshAlertPage(){
- const a=st.alert,status=$("alert-status"),checked=$("alert-checked"),stats=$("alert-stats"),empty=$("alert-history-empty"),rows=$("alert-history-list"),offlineNote=$("alert-offline");
- if(!status)return;
- const m=since(a),ago=a.last_ok?Math.floor((Date.now()-Date.parse(a.last_ok))/1e3):null;
- status.className=`al ${a.active?cls(a):""}`;
- status.innerHTML=`<div class="k">${a.active?"Повітряна тривога":"Зараз"}</div><div class="t">${a.active?lvl(a):"Тривоги немає"}</div><div class="k">${a.active?(m!==null?"Триває "+(m<1?"менше хвилини":fm(m)):"Триває"):"Можна не поспішати в укриття"}</div>`;
- if(checked)checked.textContent=ago===null?"Ще не було перевірки":"Перевірено "+(ago<60?ago+" с":Math.floor(ago/60)+" хв")+" тому";
- if(stats)stats.innerHTML=`<div class="box"><span class="sm">Тривог сьогодні</span><b>${a.today.count}</b></div><div class="box"><span class="sm">Хвилин під тривогою</span><b>${a.today.minutes}</b></div>`;
- if(empty)empty.hidden=!!a.history.length;
- if(rows)rows.innerHTML=alertHistoryRows(a.history);
- if(offlineNote)offlineNote.hidden=!offline;
- const staleBox=$("alert-stale");if(staleBox){staleBox.hidden=!a.stale;staleBox.innerHTML=a.stale?staleHtml(a):""}
-}
-
 async function load(){
  const now=kyiv();let base=new Date(mon(now).getTime()+(wd(now)>4?7*D:0)+off*7*D);
  try{st=await get(`/api/state?from=${iso(base)}&days=7`);offline=false;if(st.maintenance)return;st.base=iso(base);try{localStorage.setItem("cache",JSON.stringify(st))}catch(e){}}
@@ -399,7 +587,7 @@ async function pingActivity(){if(!tg||!tg.initData)return;try{await post("/api/a
 async function loadAdminDay(){adminDate=adminDate||iso(kyiv());try{adminDay=(await get(`/api/state?from=${adminDate}&days=1`)).days[adminDate]}catch(e){adminDay=null}try{adminOv=await get("/api/admin/overview")}catch(e){adminOv=null}}
 function askConfirm(msg){return new Promise(res=>{try{if(tg&&tg.showConfirm&&tg.isVersionAtLeast&&tg.isVersionAtLeast("6.2")){tg.showConfirm(msg,ok=>res(!!ok));return}}catch(e){}res(window.confirm(msg))})}
 let actBusy=false;
-const act=async(fn,ok)=>{if(actBusy)return;actBusy=true;try{await fn();toast(typeof ok==="function"?ok():ok);await load();if(tab==="al")await loadAlertStats();if(tab==="adm")await loadAdminDay();render()}catch(x){toast("Помилка: "+(x===403?"немає прав":x===409?"натисніть Start у чаті з ботом, щоб він міг вам писати":x===400?"перевірте дані (кінець не раніше початку, початок не в майбутньому, поточну тривогу не змінити)":"спробуйте ще раз"))}finally{actBusy=false}};
+const act=async(fn,ok)=>{if(actBusy)return;actBusy=true;try{await fn();toast(typeof ok==="function"?ok():ok);await load();if(tab==="al")await loadAlertStats();if(tab==="adm"){await loadAdminDay();await loadAdminUsers()}render()}catch(x){toast("Помилка: "+(x===403?"немає прав":x===409?"натисніть Start у чаті з ботом, щоб він міг вам писати":x===400?"перевірте дані (кінець не раніше початку, початок не в майбутньому, поточну тривогу не змінити)":"спробуйте ще раз"))}finally{actBusy=false}};
 const undo=c=>c.kind==="cancel"?post("/api/admin/cancel",{date:c.date,number:c.number,subgroup:c.subgroup,cancel:false}):c.kind==="groupremote"?post("/api/admin/remote",{date:c.date,number:c.number,subgroup:c.subgroup,value:false}):c.kind==="time"?post("/api/admin/time",{date:c.date,number:c.number,clear:true}):c.kind==="early"?post("/api/admin/endnow",{date:c.date,number:c.number,clear:true}):c.kind==="inperson"?post("/api/admin/inperson",{date:c.date,number:c.number,value:false}):c.kind==="renumber"?post("/api/admin/renumber",{date:c.date,reset:true}):post("/api/admin/lesson",{date:c.date,number:c.number,remove:true});
 
 function banner(){const a=st.alert;if(a.stale)return `<button class="ban rd" data-go="al">⚠️ Дані про тривоги застарілі<span>${a.stale_minutes} хв</span></button>`;return `<button class="ban ${a.active?cls(a):""}" data-go="al">${a.active?"🚨 "+lvl(a):"🟢 Тривоги немає"}<span>${a.active&&since(a)!==null?dur(since(a)):"Детальніше"}</span></button>`}
@@ -451,16 +639,6 @@ function dutyPage(){
  return h
 }
 function dutyPicker(id,label,names,selected){return `<div class="duty-picker" data-picker="${id}"><label>${label}</label>${appChoice("duty-"+id,names.map(name=>[name,name]),selected,"Оберіть учня")}</div>`}
-function airMap(){return `<section class="map-card"><header class="map-card-head"><div class="map-card-title"><span class="map-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-6.1 7-12a7 7 0 1 0-14 0c0 5.9 7 12 7 12Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="9" r="2.4" stroke="currentColor" stroke-width="1.8"/></svg></span><h2>Мапа повітряних тривог</h2></div><span class="map-card-source">alerts.in.ua</span></header><div class="map-frame"><iframe id="alert-map-frame" src="https://alerts.in.ua/?embed" title="Мапа повітряних тривог" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="fullscreen" style="width:100%;height:300px;border:none;"></iframe></div><a class="map-open-link" href="https://alerts.in.ua/" target="_blank" rel="noopener noreferrer">Відкрити мапу окремо ↗</a></section>`}
-function alr(){
- const a=st.alert,m=since(a),ago=a.last_ok?Math.floor((Date.now()-Date.parse(a.last_ok))/1e3):null;
- let h=`<main class="alerts-page"><div class="top"><div><h1>Тривоги</h1><small>${esc(a.region)} · оперативний стан</small></div></div>`;
- h+=`<div id="alert-offline" class="box sm" ${offline?"":"hidden"}>Немає зв'язку з ботом. Дані можуть бути застарілими.</div><div id="alert-stale" class="box" style="border-color:var(--rd);background:color-mix(in srgb,var(--rd) 10%,var(--card))" ${a.stale?"":"hidden"}>${a.stale?staleHtml(a):""}</div>`;
- h+=`<section class="alert-summary"><div id="alert-status" class="al ${a.active?cls(a):""}"><div class="k">${a.active?"Повітряна тривога":"Зараз"}</div><div class="t">${a.active?lvl(a):"Тривоги немає"}</div><div class="k">${a.active?(m!==null?"Триває "+(m<1?"менше хвилини":fm(m)):"Триває"):"Можна не поспішати в укриття"}</div></div><div id="alert-checked" class="alert-checked">${ago===null?"Ще не було перевірки":"Перевірено "+(ago<60?ago+" с":Math.floor(ago/60)+" хв")+" тому"}</div><div id="alert-stats" class="st"><div class="box"><span class="sm">Тривог сьогодні</span><b>${a.today.count}</b></div><div class="box"><span class="sm">Хвилин під тривогою</span><b>${a.today.minutes}</b></div></div></section>`;
- h+=`<div class="alert-section-title">Мапа <small>Україна · реальний час</small></div>`;
- h+=airMap();
- h+=`${statsBlock()}<div class="alert-section-title">Історія <small>${a.history.length} записів</small></div>${admin?`<button type="button" class="b2" id="alert-add" style="width:100%;margin:0 0 10px">+ Додати запис тривоги</button>`:""}<div id="alert-history-empty" class="empty" ${a.history.length?"hidden":""}>Поки що записів немає. Бот почав вести журнал з моменту оновлення.</div><div id="alert-history-list">${alertHistoryRows(a.history)}</div>${admin?clearMonthsBlock():""}</main>`;
- return h}
 function activityBlock(){
  const pageNames={sch:"Розклад",dut:"Чергові",al:"Тривоги",adm:"Керування"};
  if(!adminActivity)return `<details id="activity-section" class="admin-fold"><summary>Активність та статистика<span class="fold-meta">завантаження…</span></summary><div class="admin-fold-body"><div class="empty">Не вдалося завантажити статистику</div></div></details>`;
@@ -498,7 +676,7 @@ function adm(){
  h+=`<h2>Чергування тижнів</h2><div class="sm" style="margin-bottom:8px">Очні й дистанційні тижні чергуються. Зсув задає тип тижня з обраного понеділка, далі чергування йде від нього.</div>`+((st.week_shifts||[]).length?st.week_shifts.map(x=>`<div class="box hl"><div><b>З ${fd(x.from)}${x.from.slice(0,4)!==String(new Date().getFullYear())?"."+x.from.slice(0,4):""}</b><span class="sm">тиждень ${x.school?"очний":"дистанційний"}, далі чергуються</span></div><button class="b2 rd" data-wd="${x.id}">Видалити</button></div>`).join(""):`<div class="box sm">Зсувів немає, діє базове чергування</div>`);
  h+=`<div class="two"><div><label>З понеділка</label>${dateControl("wsd")}</div><div><label>Цей тиждень</label>${appChoice("wst",[["0","Дистанційний"],["1","Очний"]],"0")}</div></div><button class="go" id="wsadd">Зсунути чергування</button>`;
  h+=`</div></details><details class="admin-fold"><summary>Повідомлення класу</summary><div class="admin-fold-body"><h2>Написати в чат</h2><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${["Сьогодні уроки дистанційно.","Сьогодні уроки очно.","Увага: зміни в розкладі, дивіться застосунок."].map((t,i)=>`<button class="b2" style="background:var(--card)" data-tpl="${i}">${["Дистанційно","Очно","Зміни"][i]}</button>`).join("")}</div><textarea id="an" rows="3" placeholder="Текст повідомлення для класного чату"></textarea><button class="go" id="asend">Надіслати в чат</button></div></details>`;
- h+=`<details class="admin-fold"><summary>Налаштування та система</summary><div class="admin-fold-body"><h2>Сповіщення</h2><label class="box hl" style="color:var(--tx);font-size:16px;margin:0 0 8px"><span><b>Сповіщення про тривоги в чат</b><span class="sm">${S.alerts_muted?"Вимкнено адміном":"Увімкнено"}</span></span><input type="checkbox" id="mute" ${S.alerts_muted?"":"checked"} style="width:22px;height:22px;margin:0"></label>`;
+ h+=`${usersFold()}${broadcastFold()}<details class="admin-fold"><summary>Налаштування та система</summary><div class="admin-fold-body"><h2>Сповіщення</h2><label class="box hl" style="color:var(--tx);font-size:16px;margin:0 0 8px"><span><b>Сповіщення про тривоги в чат</b><span class="sm">${S.alerts_muted?"Вимкнено адміном":"Увімкнено"}</span></span><input type="checkbox" id="mute" ${S.alerts_muted?"":"checked"} style="width:22px;height:22px;margin:0"></label>`;
 h+=`<div class="box"><b>Посилання на дистанційні уроки</b><span class="sm">Додайте окрему адресу для кожного уроку. Вона з’явиться в картці онлайн-уроку.</span><div id="lesson-link-rows">${renderLessonLinkRows()}</div><button class="b2" id="linkadd" style="margin:8px 6px 0 0;background:var(--bg)">+ Додати урок</button><button class="b2" id="links-save" style="margin-top:8px;background:var(--bg)">Зберегти посилання</button></div>`;
  h+=`<div class="box" style="margin-bottom:8px"><b>Кінець розкладу (випуск)</b><span class="sm">Після цієї дати уроків немає. Порожньо - без обмеження.</span><div style="margin:8px 0">${dateControl("send",S.schedule_end||"")}</div><button class="b2" id="sendsave" style="background:var(--bg)">Зберегти дату</button></div>`;
   if(ov){
@@ -527,7 +705,7 @@ function render(){
  A.innerHTML=tab==="sch"?sch():tab==="al"?alr():tab==="dut"?dutyPage():adm();
  A.insertAdjacentHTML("afterbegin",ticker());
  prepareTicker();
- if(tab==="sch"||tab==="al")A.insertAdjacentHTML("beforeend",notifyCard());
+ if(tab==="sch"||(tab==="al"&&alertView==="now"))A.insertAdjacentHTML("beforeend",notifyCard());
 if(tab!=="adm")A.insertAdjacentHTML("beforeend",reportErrorButton());
  if(tab==="adm")A.querySelectorAll(".admin-fold").forEach((x,i)=>{if(i<openFolds.length)x.open=openFolds[i]});
  const a=st.alert,T=[["sch","Розклад"],["dut","Чергові"],["al",a.active?"🚨 Тривоги":"Тривоги"]];if(admin)T.push(["adm","Керування"]);
@@ -545,8 +723,13 @@ function renderTabTransition(){
 }
 $("tabs").onclick=async e=>{const b=e.target.closest("button");if(!b)return;if(b.hasAttribute("data-theme-toggle")){toggleTheme();return}const nextTab=b.dataset.t,changed=nextTab!==tab;tab=nextTab;hap();await pingActivity();if(tab==="adm")await loadAdmin2();if(tab==="dut")await loadDutySchedule();if(tab==="al")loadAlertStats().then(()=>{if(tab==="al"&&!$("sheet").classList.contains("on"))render()});if(changed)renderTabTransition();else render();scrollTo(0,0)};
 document.addEventListener("toggle",e=>{if(e.target&&e.target.id==="alert-stats-block")statsOpen=e.target.open},true);
-const loadAdmin2=async()=>{await loadAdminDay();await loadActivity()};
-$("app").onclick=async e=>{const b=e.target.closest("button");if(!b)return;const D_=b.dataset;
+const loadAdmin2=async()=>{await loadAdminDay();await loadActivity();await loadAdminUsers()};
+$("app").onclick=async e=>{const bar=e.target.closest("[data-bar]");if(bar){statsSel=bar.dataset.bar;hap();render();return}
+ const b=e.target.closest("button");if(!b)return;const D_=b.dataset;
+ if(D_.aview){alertView=D_.aview;hap();if(alertView==="stats"&&!alertStats)loadAlertStats().then(()=>{if(tab==="al"&&alertView==="stats")render()});render();return}
+ if(D_.afilter){histFilter=D_.afilter;histLimit=25;hap();render();return}
+ if(D_.more!==undefined){histLimit+=25;render();return}
+ if(D_.period){statsPeriod=+D_.period;statsSel=null;hap();render();return}
  
  if(D_.alertId!==undefined&&admin){const entry=st.alert.history.find(x=>x.id===D_.alertId);if(entry)openAlertSheet(entry);return}
 
@@ -593,6 +776,17 @@ $("app").onclick=async e=>{const b=e.target.closest("button");if(!b)return;const
  if(D_.linkRemove!==undefined){b.closest(".lesson-link-row").remove();return}
  if(b.id==="links-save"){const links={};for(const row of document.querySelectorAll(".lesson-link-row")){const name=row.querySelector(".lesson-link-subject").value,url=row.querySelector(".lesson-link-url").value.trim();if(!name&&!url)continue;if(!name||!url)return toast("Оберіть урок і додайте посилання для кожного рядка");if(links[name])return toast("Для цього уроку посилання вже додано");try{const parsed=new URL(url);if(parsed.protocol!=="https:"||!parsed.hostname)throw 0}catch(e){return toast("Вкажіть дійсне посилання HTTPS")};links[name]=url}return act(()=>post("/api/admin/settings",{key:"remote_lesson_links",value:links}),"Посилання збережено")}
  if(b.id==="sendsave")return act(()=>post("/api/admin/settings",{key:"schedule_end",value:$("send").value}),"Дату збережено");
+ if(b.id==="bc-test"||b.id==="bc-send"){
+  const text=($("bc-text").value||"").trim(),aud=$("bc-aud").value||"all",btn=$("bc-btn").checked,test=b.id==="bc-test";
+  if(!text)return toast("Введіть текст повідомлення");
+  const n=adminUsers?adminUsers.audience[aud]:0;
+  if(!test){if(!n)return toast("У цій аудиторії поки нікого немає");if(!await askConfirm(`Надіслати повідомлення ${n} користувачам у ЛС?\n\n«${text.slice(0,140)}${text.length>140?"…":""}»`))return}
+  if(actBusy)return;actBusy=true;b.disabled=true;
+  try{const r=await post("/api/admin/broadcast",{text,audience:aud,button:btn,test});
+   if(test)toast("Тест надіслано вам у ЛС");else{toast(`Розсилку запущено: ${r.total} отримувачів. Звіт прийде вам у ЛС`);$("bc-text").value="";await loadAdminUsers();render()}}
+  catch(x){toast(x===409?(test?"Натисніть Start у чаті з ботом, щоб він міг вам писати":"Попередня розсилка ще триває"):x===400?"Перевірте текст і аудиторію":"Не вдалося надіслати")}
+  finally{actBusy=false;b.disabled=false}
+  return}
  if(b.id==="backup-send"){if(actBusy)return;let r={};return act(async()=>{r=await post("/api/admin/backup/send",{})},()=>`Копію надіслано в Telegram (файлів: ${r.files})`)}
  if(b.id==="msave")return act(()=>post("/api/admin/settings",{key:"maintenance_message",value:$("mmsg").value}),"Текст збережено");
  if(b.id==="ticker-save"){const text=$("ticker-text").value.trim();return act(()=>post("/api/admin/settings",{key:"ticker_text",value:text}),text?"Оголошення показується":"Бігучий рядок прибрано")}
