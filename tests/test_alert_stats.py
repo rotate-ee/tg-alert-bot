@@ -51,7 +51,7 @@ def test_compute_totals_false_excluded_and_night_counted():
     assert (t["count"], t["minutes"], t["night"], t["false"]) == (2, 50, 1, 1)
     assert t["longest"]["minutes"] == 30
     assert stats["lessons"]["alerts_with_hits"] == 1 and stats["lessons"]["minutes"] == 20
-    assert len(stats["by_day"]) == 30 and sum(d["count"] for d in stats["by_day"]) == 2
+    assert len(stats["by_day"]) == 180 and sum(d["count"] for d in stats["by_day"]) == 2
     assert len(stats["by_hour"]) == 24 and stats["by_hour"][23] == 1
     assert stats["by_month"][0]["month"] == "2026-10" and stats["by_month"][0]["count"] == 2
     assert bad["id"] not in str(stats)
@@ -60,3 +60,34 @@ def test_compute_totals_false_excluded_and_night_counted():
 def test_compute_empty_log():
     stats = alert_stats.compute(now=datetime(2026, 10, 25, 12, 0, tzinfo=K))
     assert stats["totals"]["count"] == 0 and stats["totals"]["longest"] is None
+
+
+def test_dashboard_data_levels_hours_week_records_subjects():
+    lesson = first_lesson()
+    alert_log.add(at(MONDAY, lesson["start"], 5), at(MONDAY, lesson["start"], 25), "red")
+    alert_log.add(at(MONDAY, "23:10"), at(MONDAY, "23:40"), "yellow")
+    alert_log.add(at(date(2026, 10, 22), "04:00"), at(date(2026, 10, 22), "05:00"), "red")
+    now = datetime(2026, 10, 25, 12, 0, tzinfo=K)
+    stats = alert_stats.compute(now=now)
+    day = next(d for d in stats["by_day"] if d["date"] == "2026-10-19")
+    assert (day["count"], day["red"], day["yellow"], day["night"], day["minutes"]) == (2, 1, 1, 1, 50)
+    assert set(stats["hours"]) == {"7", "30", "90"} and sum(stats["hours"]["7"]) == 3 and stats["hours"]["7"][4] == 1
+    assert len(stats["week"]) == 7 and stats["week"][-1]["date"] == "2026-10-25"
+    mon = next(w for w in stats["week"] if w["date"] == "2026-10-19")
+    assert sorted((x["level"]) for x in mon["segments"]) == ["red", "yellow"]
+    assert all(0 <= x["s"] < x["e"] <= 1440 for w in stats["week"] for x in w["segments"])
+    r = stats["records"]
+    assert r["busiest_day"] == {"date": "2026-10-19", "count": 2} and r["longest"]["minutes"] == 60
+    # з 05:00 22.10 до 12:00 25.10 - 79 год на годиннику, але 25.10.2026 у Києві переводять годинник назад (+1 год)
+    assert r["calm_current_hours"] == 80
+    assert r["calm_longest_hours"] == 52          # з 23:40 пн до 04:00 чт
+    assert stats["subjects"][0]["name"] == lesson["name"] and stats["subjects"][0]["count"] == 1
+
+
+def test_alert_crossing_midnight_is_split_in_week_strip():
+    alert_log.add("2026-10-24 23:30", "2026-10-25 00:30", "red")
+    stats = alert_stats.compute(now=datetime(2026, 10, 25, 12, 0, tzinfo=K))
+    saturday = next(w for w in stats["week"] if w["date"] == "2026-10-24")
+    sunday = next(w for w in stats["week"] if w["date"] == "2026-10-25")
+    assert saturday["segments"] == [{"s": 23 * 60 + 30, "e": 1440, "level": "red"}]
+    assert sunday["segments"] == [{"s": 0, "e": 30, "level": "red"}]

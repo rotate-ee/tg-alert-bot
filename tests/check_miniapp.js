@@ -35,9 +35,11 @@ const dom = new JSDOM(html, {
     w.fetch = async (url, opts = {}) => {
       const p = new URL(url).pathname;
       if ((opts.method || "GET") === "POST") {
-        posts.push({ path: p, body: opts.body ? JSON.parse(opts.body) : {} });
-        if (p === "/api/subscribe") return subscribeStatus === 200 ? respond(200, { ok: true, topics: JSON.parse(opts.body).topics }) : respond(subscribeStatus, { error: "start_bot" });
+        const body = opts.body ? JSON.parse(opts.body) : {};
+        posts.push({ path: p, body });
+        if (p === "/api/subscribe") return subscribeStatus === 200 ? respond(200, { ok: true, topics: body.topics }) : respond(subscribeStatus, { error: "start_bot" });
         if (p === "/api/admin/backup/send") return respond(200, { ok: true, files: 3, bytes: 1234 });
+        if (p === "/api/admin/broadcast") return respond(200, body.test ? { ok: true, test: true } : { ok: true, total: fixture.users_stats.audience[body.audience] });
         return respond(200, { ok: true });
       }
       if (p === "/api/state") return respond(200, stateFor(url));
@@ -45,6 +47,7 @@ const dom = new JSDOM(html, {
       if (p === "/api/alert_stats") return respond(200, fixture.alert_stats);
       if (p === "/api/admin/overview") return respond(200, fixture.overview);
       if (p === "/api/admin/activity") return respond(200, fixture.activity);
+      if (p === "/api/admin/users") return respond(200, fixture.users_stats);
       if (p === "/api/duties") return respond(200, fixture.duties);
       return respond(404, {});
     };
@@ -56,9 +59,10 @@ const dom = new JSDOM(html, {
   },
 });
 const doc = dom.window.document;
+const Ev = dom.window.Event;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const text = id => (doc.getElementById(id) || {}).textContent || "";
-const app = () => doc.getElementById("app").textContent.replace(/\s+/g, " ");
+const click = async (sel, wait = 250) => { const el = doc.querySelector(sel); if (!el) { check("element exists: " + sel, false); return null; } el.click(); await sleep(wait); return el; };
 
 (async () => {
   await sleep(900);
@@ -66,41 +70,80 @@ const app = () => doc.getElementById("app").textContent.replace(/\s+/g, " ");
   check("schedule: stale banner in schedule", /застарілі/.test(doc.querySelector(".ban")?.textContent || ""));
   check("schedule: personal notification toggles", doc.querySelectorAll("[data-sub]").length === 2);
 
-  // вкладка тривог
-  doc.querySelector('[data-t="al"]').click();
-  await sleep(500);
-  const staleBox = doc.getElementById("alert-stale");
-  check("alerts: stale warning visible", staleBox && !staleBox.hidden && /не оновлюються/.test(staleBox.textContent) && /тестова помилка/.test(staleBox.textContent), "admin sees the reason");
-  const hist = doc.getElementById("alert-history-list").textContent;
-  check("alerts: lesson interrupted shown in history", /Перервала:/.test(hist));
-  check("alerts: false alert marked", /хибна/.test(hist));
-  const stats = doc.getElementById("alert-stats-block");
-  check("alerts: statistics block rendered with data", stats && /за 30 днів/.test(stats.querySelector(".fold-meta").textContent) && /Вплив на навчання/.test(stats.textContent) && /перервали/.test(stats.textContent));
-  check("alerts: statistics charts (30 days + 24 hours)", stats.querySelectorAll('div[title]').length >= 54);
-  check("alerts: admin tools present", !!doc.getElementById("alert-add") && doc.querySelectorAll("[data-clear-month]").length >= 1);
+  // тривоги: Зараз
+  await click('[data-t="al"]', 500);
+  check("alerts: three sections", doc.querySelectorAll("[data-aview]").length === 3 && doc.querySelector('[data-aview="now"]').classList.contains("on"));
+  const hero = doc.getElementById("av-hero");
+  check("alerts: hero shows state + stale warning with reason (admin)", hero && /не оновлюються/.test(hero.textContent) && /тестова помилка/.test(hero.textContent) && /Повітряна тривога/.test(hero.textContent));
+  check("alerts: 24h timeline for today", !!doc.querySelector("#av-today-wrap .av-24-track .now") && doc.querySelectorAll("#av-today-wrap .av-24-track i").length >= 2);
+  check("alerts: map embed from alerts.in.ua", /alerts\.in\.ua\/\?embed/.test(doc.getElementById("alert-map-frame")?.src || ""));
+  check("alerts: notification toggles shown on 'now'", doc.querySelectorAll("[data-sub]").length === 2);
 
   // підписка на особисті сповіщення
   const alertsBox = doc.querySelector('[data-sub="alerts"]');
-  alertsBox.checked = true; alertsBox.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+  alertsBox.checked = true; alertsBox.dispatchEvent(new Ev("change", { bubbles: true }));
   await sleep(300);
   check("subscribe: POST with chosen topics", posts.some(p => p.path === "/api/subscribe" && JSON.stringify(p.body.topics) === '["alerts"]'));
   check("subscribe: checkbox stays on after success", doc.querySelector('[data-sub="alerts"]').checked === true);
   subscribeStatus = 409;
   const changesBox = doc.querySelector('[data-sub="changes"]');
-  changesBox.checked = true; changesBox.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+  changesBox.checked = true; changesBox.dispatchEvent(new Ev("change", { bubbles: true }));
   await sleep(300);
   check("subscribe: 409 shows 'start the bot' sheet", doc.getElementById("sheet").classList.contains("on") && /Спочатку запустіть бота/.test(text("panel")));
   check("subscribe: checkbox reverted after 409", doc.querySelector('[data-sub="changes"]').checked === false);
   doc.getElementById("sheet").classList.remove("on");
 
-  // адмінка: резервна копія
-  doc.querySelector('[data-t="adm"]').click();
-  await sleep(600);
+  // тривоги: Історія
+  await click('[data-aview="hist"]');
+  const rows = [...doc.querySelectorAll("#av-history .av-row")];
+  check("history: grouped rows rendered as buttons for admin", rows.length >= 3 && rows.every(r => r.tagName === "BUTTON" && r.dataset.alertId), `${rows.length} rows`);
+  check("history: day groups with counts", doc.querySelectorAll("#av-history .av-day").length >= 2 && /тривог/.test(doc.querySelector("#av-history .av-day span").textContent));
+  check("history: interrupted lessons + false alert marked", /Перервала:/.test(text("av-history")) && /хибна/.test(text("av-history")));
+  check("history: admin tools (add, clear by month)", !!doc.getElementById("alert-add") && doc.querySelectorAll("[data-clear-month]").length >= 1);
+  const before = doc.querySelectorAll("#av-history .av-row").length;
+  await click('[data-afilter="lessons"]');
+  const filtered = [...doc.querySelectorAll("#av-history .av-row")];
+  check("history: filter 'on lessons' keeps only interrupting alerts", filtered.length >= 1 && filtered.length < before && filtered.every(r => /Перервала:/.test(r.textContent)));
+  await click('[data-afilter="all"]');
+
+  // тривоги: Статистика
+  await click('[data-aview="stats"]', 400);
+  check("stats: period chips + 4 KPI cards", doc.querySelectorAll("[data-period]").length === 3 && doc.querySelectorAll(".alerts-page > .av-kpis .av-kpi").length === 4);
+  check("stats: stacked chart with 30 clickable bars", doc.querySelectorAll("svg.av-svg [data-bar]").length === 30);
+  const readout0 = doc.querySelector(".av-readout").textContent;
+  const bars = [...doc.querySelectorAll("svg.av-svg [data-bar]")];
+  bars[3].dispatchEvent(new Ev("click", { bubbles: true })); await sleep(200);
+  check("stats: tapping a bar updates the day readout", doc.querySelector(".av-readout").textContent !== readout0);
+  await click('[data-period="7"]');
+  check("stats: 7-day period shows 7 bars", doc.querySelectorAll("svg.av-svg [data-bar]").length === 7);
+  await click('[data-period="30"]');
+  check("stats: 24h ring with 24 segments and peak", doc.querySelectorAll("svg.av-ring path").length === 24 && /пік/.test(doc.querySelector("svg.av-ring").textContent));
+  check("stats: week strip with 7 days", doc.querySelectorAll(".av-week-row").length === 7);
+  check("stats: lessons impact, records, months", /Вплив на навчання/.test(text("app")) && /Найдовша тривога/.test(text("app")) && /По місяцях/.test(text("app")) && doc.querySelectorAll(".av-hbar").length >= 2);
+
+  // адмінка
+  await click('[data-t="adm"]', 700);
+  const folds = [...doc.querySelectorAll(".admin-fold")].map(f => f.querySelector("summary").textContent);
+  check("admin: users/starts and broadcast folds present", folds.some(t => /Користувачі та запуски/.test(t)) && folds.some(t => /Розсилка в ЛС/.test(t)));
+  const usersFold = [...doc.querySelectorAll(".admin-fold")].find(f => /Користувачі та запуски/.test(f.textContent));
+  check("admin: starts KPIs, per-day chart and recent starters", usersFold.querySelectorAll(".av-kpi").length === 4 && !!usersFold.querySelector("svg.av-svg") && usersFold.querySelectorAll(".av-row").length >= 1);
   const backupBtn = doc.getElementById("backup-send");
   check("admin: backup button present", !!backupBtn);
   if (backupBtn) { backupBtn.click(); await sleep(400); }
   check("admin: backup request sent", posts.some(p => p.path === "/api/admin/backup/send"));
   check("admin: toast confirms backup", /Копію надіслано/.test(text("toast")));
+
+  // розсилка
+  doc.getElementById("bc-send").click(); await sleep(200);
+  check("broadcast: empty text is rejected", !posts.some(p => p.path === "/api/admin/broadcast") && /Введіть текст/.test(text("toast")));
+  const ta = doc.getElementById("bc-text"); ta.value = "Завтра уроки з 9:00"; ta.dispatchEvent(new Ev("input", { bubbles: true }));
+  check("broadcast: character counter", /19 \/ 3500/.test(text("bc-count")));
+  doc.getElementById("bc-test").click(); await sleep(300);
+  check("broadcast: test goes with test=true", posts.some(p => p.path === "/api/admin/broadcast" && p.body.test === true && p.body.text === "Завтра уроки з 9:00"));
+  doc.getElementById("bc-send").click(); await sleep(500);
+  const sent = posts.filter(p => p.path === "/api/admin/broadcast" && !p.body.test)[0];
+  check("broadcast: send posts audience + button flag", !!sent && sent.body.audience === "all" && sent.body.button === true);
+  check("broadcast: toast reports recipients", /Розсилку запущено/.test(text("toast")));
 
   check("no uncaught JS errors", errors.length === 0, errors.join("; "));
   console.log(failures.length ? `\n${failures.length} FAILED: ${failures.join(", ")}` : "\nAll miniapp checks passed");
