@@ -121,6 +121,17 @@ const click = async (sel, wait = 250) => { const el = doc.querySelector(sel); if
   check("stats: week strip with 7 days", doc.querySelectorAll(".av-week-row").length === 7);
   check("stats: lessons impact, records, months", /Вплив на навчання/.test(text("app")) && /Найдовша тривога/.test(text("app")) && /По місяцях/.test(text("app")) && doc.querySelectorAll(".av-hbar").length >= 2);
 
+  // старий бот (ще без нових полів статистики) не повинен ламати застосунок
+  const full = JSON.parse(JSON.stringify(fixture.alert_stats));
+  fixture.alert_stats = { generated: full.generated, totals: full.totals, by_hour: full.by_hour, by_month: full.by_month, lessons: full.lessons,
+    by_day: full.by_day.slice(-30).map(({ date, count, minutes }) => ({ date, count, minutes })) };
+  await click('[data-t="sch"]', 300); await click('[data-t="al"]', 500); await click('[data-aview="stats"]', 500);
+  check("old bot payload: stats still render (no crash overlay)", !doc.getElementById("fatal-overlay") && doc.querySelectorAll(".alerts-page > .av-kpis .av-kpi").length === 4 && doc.querySelectorAll("svg.av-svg [data-bar]").length === 30);
+  check("old bot payload: hint that the bot is updating", /ще оновлюється/.test(text("app")));
+  await click('[data-period="90"]', 300);
+  check("old bot payload: 90-day period does not crash", !doc.getElementById("fatal-overlay") && doc.querySelectorAll("svg.av-svg [data-bar]").length === 30);
+  fixture.alert_stats = full;
+
   // адмінка
   await click('[data-t="adm"]', 700);
   const folds = [...doc.querySelectorAll(".admin-fold")].map(f => f.querySelector("summary").textContent);
