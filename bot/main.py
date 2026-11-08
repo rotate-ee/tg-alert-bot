@@ -21,6 +21,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
+    ChatMemberUpdated,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     BufferedInputFile,
@@ -42,6 +43,7 @@ import notify
 import remote_overrides
 import remote_lesson_overrides
 import settings
+import users
 from alerts import AlertWatcher
 from lessons import (
     find_current_and_next,
@@ -114,8 +116,20 @@ async def cmd_week(message: Message):
     await message.answer(text, parse_mode=ParseMode.HTML)
 
 
+@dp.my_chat_member()
+async def on_my_chat_member(event: ChatMemberUpdated):
+    """Користувач заблокував або знову розблокував бота (лише приватні чати) - для розсилок і статистики."""
+    if event.chat.type == "private":
+        users.set_blocked(event.from_user.id, event.new_chat_member.status in ("kicked", "left"))
+
+
 @dp.message(Command("start", "help"))
 async def cmd_help(message: Message):
+    if message.chat.type == "private" and message.from_user and (message.text or "").startswith("/start"):
+        try:
+            users.record_start(message.from_user.model_dump())  # статистика запусків бота
+        except Exception:
+            log.exception("Не вдалося записати запуск бота")
     text = (
         f"👋 <b>Вітаю!</b> Я повідомляю про повітряні тривоги в <b>{escape(config.REGION_TITLE)}</b> "
         "і допомагаю швидко перевірити розклад уроків.\n\n"
@@ -1079,6 +1093,13 @@ async def watch_alerts():
 
 
 async def main():
+    api.MINIAPP_URL_FN = _miniapp_url
+    try:
+        added = users.seed_from_activity()
+        if added:
+            log.info("До реєстру користувачів додано з активності застосунку: %s", added)
+    except Exception:
+        log.exception("Не вдалося заповнити реєстр користувачів")
     await api.start(bot, alert_watcher)
     asyncio.create_task(watch_alerts())
     asyncio.create_task(watch_staleness())

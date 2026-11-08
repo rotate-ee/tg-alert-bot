@@ -21,6 +21,7 @@ import alert_stats
 import activity
 import backup
 import bell_overrides
+import broadcast
 import cancellations
 import config
 import duties
@@ -35,11 +36,13 @@ import remote_lesson_overrides
 import remote_periods
 import renumber
 import settings
+import users
 import week_shifts
 
 log = logging.getLogger("api")
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 MAX_DAYS = 31
+MINIAPP_URL_FN = lambda: ""  # main.py підставляє функцію, що повертає адресу застосунку для кнопки в розсилці
 STARTED_AT = _time.time()
 _report_last_sent: dict[int, float] = {}
 
@@ -356,7 +359,47 @@ async def a_subscribe(request: web.Request) -> web.Response:
             raise web.HTTPConflict(text=json.dumps({"error": "start_bot"}), content_type="application/json")
         except Exception:
             raise web.HTTPBadGateway(text=json.dumps({"error": "send_failed"}), content_type="application/json")
+    users.mark_reachable(user)  # бот зміг написати - користувач доступний для розсилок
     return web.json_response({"ok": True, "topics": notify.set_topics(uid, topics, str(user.get("first_name", "")))})
+
+
+async def a_users(request: web.Request) -> web.Response:
+    _need_admin(request)
+    return web.json_response({
+        "stats": users.stats(),
+        "broadcasts": broadcast.history(5),
+        "audience": {"all": len(users.audience_ids("all")), "subscribers": len(users.audience_ids("subscribers"))},
+        "running": broadcast.is_running(),
+    })
+
+
+async def a_broadcast(request: web.Request) -> web.Response:
+    user = _need_admin(request)
+    b = await request.json()
+    text = str(b.get("text", "")).strip()
+    audience = str(b.get("audience", "all"))
+    if not text or len(text) > 3500:
+        raise _bad("text")
+    if audience not in ("all", "subscribers"):
+        raise _bad("audience")
+    url = MINIAPP_URL_FN() if b.get("button") else ""
+    bot = request.app["bot"]
+    if b.get("test"):  # тест - лише адміну, відразу з результатом
+        if not broadcast.try_begin():
+            raise web.HTTPConflict(text=json.dumps({"error": "busy"}), content_type="application/json")
+        result = await broadcast.run(bot, user["id"], text, audience, url, test=True)
+        if result["sent"] != 1:
+            raise web.HTTPConflict(text=json.dumps({"error": "start_bot"}), content_type="application/json")
+        return web.json_response({"ok": True, "test": True})
+    total = len(users.audience_ids(audience))
+    if total == 0:
+        raise _bad("empty")
+    if not broadcast.try_begin():
+        raise web.HTTPConflict(text=json.dumps({"error": "busy"}), content_type="application/json")
+    task = asyncio.create_task(broadcast.run(bot, user["id"], text, audience, url))
+    request.app.setdefault("tasks", set()).add(task)
+    task.add_done_callback(request.app["tasks"].discard)
+    return web.json_response({"ok": True, "total": total})
 
 
 async def a_backup_send(request: web.Request) -> web.Response:
@@ -813,6 +856,8 @@ def build_app(bot, watcher) -> web.Application:
     app.router.add_get("/api/alert_stats", alert_stats_view)
     app.router.add_post("/api/subscribe", a_subscribe)
     app.router.add_post("/api/admin/backup/send", a_backup_send)
+    app.router.add_get("/api/admin/users", a_users)
+    app.router.add_post("/api/admin/broadcast", a_broadcast)
     app.router.add_get("/api/duties", duty_schedule)
     app.router.add_post("/api/activity", a_presence)
     app.router.add_get("/api/admin/activity", a_activity_stats)
