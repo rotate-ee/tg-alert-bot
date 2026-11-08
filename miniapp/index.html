@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="uk">
-<heсмсad>
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Розклад</title>
@@ -741,7 +741,7 @@ $("app").onclick=async e=>{const bar=e.target.closest("[data-bar]");if(bar){stat
   sheet(`<h3 style="margin:0 0 6px">Повідомити про помилку</h3><div class="sm" style="margin-bottom:10px">Опишіть, що відображається неправильно. Повідомлення побачать адміністратори.</div><textarea id="report-text" rows="4" maxlength="1000" placeholder="Наприклад: у розкладі на середу помилковий час уроку"></textarea><button class="go" id="report-send" data-action="send-report">Надіслати</button>`);
   return
  }
- if(D_.appMode){const mode=D_.appMode,label={open:"Застосунок відкрито",maintenance:"Технічні роботи увімкнено",stopped:"Застосунок зупинено"}[mode];return act(()=>post("/api/admin/settings",{key:"app_mode",value:mode}),label)}
+ if(D_.appMode){const mode=D_.appMode,label={open:"Застосунок відкрито",maintenance:"Технічні роботи",stopped:"Застосунок зупинено"}[mode];return act(()=>post("/api/admin/settings",{key:"app_mode",value:mode}),label)}
  if(D_.go){tab="al";hap();return render()}
  if(D_.dateTarget){openDatePicker(D_.dateTarget);return}
  if(D_.wv!==undefined)wv=D_.wv==="1";
@@ -784,7 +784,7 @@ $("app").onclick=async e=>{const bar=e.target.closest("[data-bar]");if(bar){stat
   if(actBusy)return;actBusy=true;b.disabled=true;
   try{const r=await post("/api/admin/broadcast",{text,audience:aud,button:btn,test});
    if(test)toast("Тест надіслано вам у ЛС");else{toast(`Розсилку запущено: ${r.total} отримувачів. Звіт прийде вам у ЛС`);$("bc-text").value="";await loadAdminUsers();render()}}
-  catch(x){toast(x===409?(test?"Натисніть Start у чаті з ботом, щоб він міг вам писати":"Попередня розсилка ще триває"):x===400?"Перевірте текст і аудиторію":"Не вдалося надіслати")}
+  catch(x){toast(x===409?(test?"Натисніть Запустити у чаті з ботом, щоб він міг вам писати":"Попередня розсилка ще триває"):x===400?"Перевірте текст і аудиторію":"Не вдалося надіслати")}
   finally{actBusy=false;b.disabled=false}
   return}
  if(b.id==="backup-send"){if(actBusy)return;let r={};return act(async()=>{r=await post("/api/admin/backup/send",{})},()=>`Копію надіслано в Telegram (файлів: ${r.files})`)}
