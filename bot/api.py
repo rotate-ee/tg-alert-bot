@@ -31,6 +31,7 @@ import extra_lessons
 import holidays
 import lessons
 import notify
+import power
 import remote_overrides
 import remote_lesson_overrides
 import remote_periods
@@ -400,6 +401,33 @@ async def a_broadcast(request: web.Request) -> web.Response:
     request.app.setdefault("tasks", set()).add(task)
     task.add_done_callback(request.app["tasks"].discard)
     return web.json_response({"ok": True, "total": total})
+
+
+async def power_view(request: web.Request) -> web.Response:
+    """Графіки відключень світла з сайту ДПЕМ (публічне читання, як і решта розкладу)."""
+    stored = power.load()
+    seconds = power.stale_seconds()
+    stale = bool(stored) and seconds > config.POWER_STALE_SECONDS
+    out = {
+        "enabled": config.POWER_ENABLED, "queues": power.QUEUES, "source": "https://info.dpem.mk.ua/",
+        "snapshot": stored["snapshot"] if stored else None, "fetched": stored.get("fetched") if stored else None,
+        "stale": stale, "stale_minutes": seconds // 60 if stale else 0,
+    }
+    if _admin(request) is not None:
+        out["last_error"], out["fail_count"] = power.last_error, power.fail_count
+    return web.json_response(out)
+
+
+async def a_power_refresh(request: web.Request) -> web.Response:
+    _need_admin(request)
+    import aiohttp
+    try:
+        async with aiohttp.ClientSession() as session:
+            result = await power.run_once(session)
+    except Exception as e:
+        return web.json_response({"error": "fetch_failed", "detail": f"{type(e).__name__}: {e}"[:200]}, status=502)
+    return web.json_response({"ok": True, "changed": result["diff"] is not None, "first": result["first"],
+                              "warnings": result["snapshot"]["warnings"]})
 
 
 async def a_backup_send(request: web.Request) -> web.Response:
@@ -854,6 +882,8 @@ def build_app(bot, watcher) -> web.Application:
     app.router.add_get("/api/state", state)
     app.router.add_get("/api/me", me)
     app.router.add_get("/api/alert_stats", alert_stats_view)
+    app.router.add_get("/api/power", power_view)
+    app.router.add_post("/api/admin/power/refresh", a_power_refresh)
     app.router.add_post("/api/subscribe", a_subscribe)
     app.router.add_post("/api/admin/backup/send", a_backup_send)
     app.router.add_get("/api/admin/users", a_users)

@@ -8,7 +8,7 @@ DATA_DIR = Path(_data_dir) if _data_dir else Path(__file__).parent / "data"
 DATA_PATH = DATA_DIR / "settings.json"
 DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
 # schedule_end: остання дата дії розкладу (випуск), "" - без обмеження
-DEFAULTS = {"alerts_muted": False, "maintenance": False, "app_mode": "open", "maintenance_message": "", "ticker_text": "", "schedule_end": "2027-08-31", "remote_lesson_links": {}, "seasonal_theme": "auto"}
+DEFAULTS = {"alerts_muted": False, "maintenance": False, "app_mode": "open", "maintenance_message": "", "ticker_text": "", "schedule_end": "2027-08-31", "remote_lesson_links": {}, "seasonal_theme": "auto", "power_notify": True}
 
 
 def load() -> dict:

@@ -90,3 +90,10 @@ ALERT_STALE_SECONDS = int(os.getenv("ALERT_STALE_SECONDS", "180"))
 # о цій годині (Europe/Kyiv, ЧЧ:ММ). "off" - вимкнути.
 BACKUP_TIME = os.getenv("BACKUP_TIME", "03:30").strip()
 
+# Графіки відключень світла (ГПВ) з сайту ДПЕМ "Атомсервіс": оперативний блок на головній сторінці.
+POWER_ENABLED = os.getenv("POWER_ENABLED", "1").strip().lower() not in ("0", "false", "off", "no")
+POWER_URL = os.getenv("POWER_URL", "https://info.dpem.mk.ua/index.html").strip()
+POWER_POLL_SECONDS = int(os.getenv("POWER_POLL_SECONDS", "180"))
+# Скільки секунд сайт не вдається прочитати, перш ніж адмінам прийде попередження.
+POWER_STALE_SECONDS = int(os.getenv("POWER_STALE_SECONDS", "1800"))
+

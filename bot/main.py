@@ -40,6 +40,7 @@ import early_end
 import extra_lessons
 import holidays
 import notify
+import power
 import remote_overrides
 import remote_lesson_overrides
 import settings
@@ -903,6 +904,52 @@ async def _personal_alert(event: str, level: str | None) -> None:
         log.exception("Помилка особистих сповіщень про тривогу")
 
 
+def _power_silent() -> bool:
+    """Уночі повідомлення про графік світла приходять без звуку."""
+    hour = datetime.now(KYIV_TZ).hour
+    return hour >= 23 or hour < 7
+
+
+async def _notify_power_change(old, new, change) -> None:
+    """Повідомлення в чат класу, коли на сайті ДПЕМ змінився графік відключень світла."""
+    if not settings.get("power_notify"):
+        return
+    text = power.format_change(old, new, change)
+    if text:
+        await bot.send_message(config.CHAT_ID, text, parse_mode=ParseMode.HTML, disable_notification=_power_silent())
+
+
+async def watch_power():
+    """Читає графік відключень з сайту ДПЕМ; при зміні пише в чат; при тривалому збої попереджає адмінів."""
+    power.NOTIFIER = _notify_power_change
+    warned = False
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                await power.run_once(session)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.warning("Графік світла: не вдалося оновити (%s: %s)", type(e).__name__, e)
+            try:
+                seconds = power.stale_seconds()
+                stale = seconds > config.POWER_STALE_SECONDS
+                if stale and not warned:
+                    warned = True
+                    await notify_admins(
+                        f"⚠️ <b>Графік відключень світла не оновлюється вже {seconds // 60} хв</b>\n"
+                        f"{escape(power.last_error or 'причина невідома')}\n\n"
+                        "Сайт ДПЕМ недоступний або змінилась його верстка. У застосунку показується останній відомий графік.")
+                elif not stale and warned:
+                    warned = False
+                    await notify_admins("✅ Графік відключень світла знову оновлюється.")
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("Помилка перевірки свіжості графіка світла")
+            await asyncio.sleep(config.POWER_POLL_SECONDS)
+
+
 async def watch_staleness():
     """Попереджає адмінів, якщо дані alert.in.ua давно не оновлювались (і коли знову ожили)."""
     warned = False
@@ -1103,6 +1150,8 @@ async def main():
     await api.start(bot, alert_watcher)
     asyncio.create_task(watch_alerts())
     asyncio.create_task(watch_staleness())
+    if config.POWER_ENABLED:
+        asyncio.create_task(watch_power())
     asyncio.create_task(changes_dispatcher())
     asyncio.create_task(weekly_backup())
     asyncio.create_task(morning_digest())
