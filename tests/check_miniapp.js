@@ -16,6 +16,8 @@ scripts.forEach(js => { try { new Function(js); } catch (e) { syntax = false; co
 check("JS syntax", syntax);
 const css = html.match(/<style>([\s\S]*?)<\/style>/)[1];
 check("CSS braces balanced", (css.match(/{/g) || []).length === (css.match(/}/g) || []).length);
+const trackRule = (css.match(/\.ticker-track\{[^}]*\}/) || [""])[0];
+check("ticker: GPU-accelerated (will-change, translate3d, backface-visibility)", /will-change:transform/.test(trackRule) && /translate3d\(0,0,0\)/.test(trackRule) && /backface-visibility:hidden/.test(trackRule) && /translate3d\(-50%,0,0\)/.test(css));
 
 // 2) екрани
 const posts = [];
@@ -49,6 +51,7 @@ const dom = new JSDOM(html, {
       if (p === "/api/admin/activity") return respond(200, fixture.activity);
       if (p === "/api/admin/users") return respond(200, fixture.users_stats);
       if (p === "/api/duties") return respond(200, fixture.duties);
+      if (p === "/api/power") return respond(200, fixture.power);
       return respond(404, {});
     };
     w.Telegram = { WebApp: { ready() {}, expand() {}, initData: fixture.init_data, isVersionAtLeast: () => true,
@@ -93,6 +96,10 @@ const click = async (sel, wait = 250) => { const el = doc.querySelector(sel); if
   check("subscribe: checkbox reverted after 409", doc.querySelector('[data-sub="changes"]').checked === false);
   doc.getElementById("sheet").classList.remove("on");
 
+  // бігуча строка: один постійний елемент, що не перезапускається при кожному оновленні екрана
+  const tickerNode = doc.querySelector(".ticker");
+  check("ticker: rendered once in its own slot", !!tickerNode && doc.getElementById("ticker-slot").contains(tickerNode) && !doc.getElementById("app").querySelector(".ticker"));
+
   // тривоги: Історія
   await click('[data-aview="hist"]');
   const rows = [...doc.querySelectorAll("#av-history .av-row")];
@@ -131,6 +138,34 @@ const click = async (sel, wait = 250) => { const el = doc.querySelector(sel); if
   await click('[data-period="90"]', 300);
   check("old bot payload: 90-day period does not crash", !doc.getElementById("fatal-overlay") && doc.querySelectorAll("svg.av-svg [data-bar]").length === 30);
   fixture.alert_stats = full;
+
+  // світло
+  const pdays = fixture.power.snapshot.days, pkeys = Object.keys(pdays).sort();
+  Object.assign(pdays[pkeys[0]].queues, { "1-І": [[0, 1440]], "2-І": [] });       // детермінований стан "зараз"
+  pdays[pkeys[0]].levels = [{ s: 0, e: 1440, n: 2, text: "2 черги" }];
+  await click('[data-t="pw"]', 500);
+  check("power: 5 tabs for admin, no truncated emoji labels", doc.querySelectorAll("#tabs [data-t]").length === 5 && !/🚨/.test(doc.getElementById("tabs").textContent));
+  check("power: queue picker with 12 sub-queues", doc.querySelectorAll(".pw-grid .pw-q").length === 12);
+  check("power: day chips today/tomorrow", [...doc.querySelectorAll("[data-pday]")].map(b => b.textContent).join() === "Сьогодні,Завтра");
+  await click('.pw-q[data-pq="1-І"]');
+  const pwHero = () => doc.querySelector(".av-hero");
+  check("power: whole-day outage shows 'no electricity'", pwHero().classList.contains("rd") && /Світла немає/.test(pwHero().textContent));
+  check("power: selected queue is remembered", dom.window.localStorage.getItem("power_queue") === "1-І");
+  await click('.pw-q[data-pq="2-І"]');
+  check("power: queue without outages shows 'electricity is on'", pwHero().classList.contains("ok") && /Світло є/.test(pwHero().textContent));
+  check("power: 24h chart, mode strip and all-queues table", !!doc.querySelector("section.av-card .av-24-track") && /Режим обмежень/.test(text("app")) && doc.querySelectorAll(".pw-row").length === 12);
+  await click('.pw-row[data-pq="1-І"]');
+  check("power: tapping a row in 'all queues' selects that queue", doc.querySelector(".pw-q.on").dataset.pq === "1-І");
+  check("power: interval list for selected queue", /1 доба|24:00|24 год/.test(doc.querySelector(".av-list").textContent) || doc.querySelectorAll(".av-list .av-row").length >= 1);
+  await click('[data-pday="' + pkeys[1] + '"]');
+  check("power: tomorrow summary", /Завтра/.test(pwHero().textContent) && !pwHero().classList.contains("rd"));
+  check("power: DPEM notes and source link", /Примітки ДПЕМ/.test(text("app")) && /info\.dpem\.mk\.ua/.test(doc.getElementById("app").innerHTML));
+  check("power: admin controls present", !!doc.getElementById("pw-notify") && !!doc.getElementById("pw-refresh"));
+  doc.getElementById("pw-refresh").click(); await sleep(400);
+  check("power: manual refresh request", posts.some(p => p.path === "/api/admin/power/refresh"));
+  const sw = doc.getElementById("pw-notify"); sw.checked = false; sw.dispatchEvent(new Ev("change", { bubbles: true })); await sleep(400);
+  check("power: chat-notification switch saved", posts.some(p => p.path === "/api/admin/settings" && p.body.key === "power_notify" && p.body.value === false));
+  check("ticker: same DOM node survived all re-renders (animation not restarted)", doc.querySelector(".ticker") === tickerNode);
 
   // адмінка
   await click('[data-t="adm"]', 700);

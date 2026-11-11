@@ -84,10 +84,27 @@ def seed_users(now: datetime) -> None:
     users.DATA_PATH.write_text(_json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 
+def seed_power(now: datetime) -> None:
+    """Графік світла з реальної (збереженої) верстки сайту ДПЕМ; дати зсунуто на сьогодні/завтра."""
+    import power
+    import settings
+    html = (pathlib.Path(__file__).parent / "fixtures" / "dpem_index.html").read_text(encoding="utf-8")
+    snap = power.parse_html(html)
+    today = now.date()
+    day = next(iter(snap["days"].values()))
+    tomorrow = {"levels": [{"s": 0, "e": 1440, "n": 2, "text": "2 черги"}],
+                "queues": {q: [[(i * 70) % 1000, (i * 70) % 1000 + 240]] for i, q in enumerate(power.QUEUES)}}
+    snap["days"] = {today.isoformat(): day, (today + timedelta(days=1)).isoformat(): tomorrow}
+    power._save({"snapshot": snap, "fetched": now.isoformat(timespec="seconds"), "sig": ""})
+    power.last_ok = now
+    settings.set_value("ticker_text", "Тестове оголошення для бігучого рядка")
+
+
 async def main(out: str, rich: bool = False) -> None:
     now = datetime.now(K)
     seed_rich(now) if rich else seed(now)
     seed_users(now)
+    seed_power(now)
     watcher = AlertWatcher("x", "Миколаївська область")
     watcher._was_active, watcher._level = True, "red"
     watcher.last_ok = now - timedelta(minutes=10)  # дані застарілі
@@ -105,6 +122,7 @@ async def main(out: str, rich: bool = False) -> None:
         "activity": await (await get("/api/admin/activity")).json(),
         "duties": await (await get("/api/duties")).json(),
         "users_stats": await (await get("/api/admin/users")).json(),
+        "power": await (await get("/api/power")).json(),
         "init_data": h["X-Init-Data"],
     }
     await client.close()
