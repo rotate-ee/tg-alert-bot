@@ -157,6 +157,19 @@ const click = async (sel, wait = 250) => { const el = doc.querySelector(sel); if
   await click('.pw-row[data-pq="1-І"]');
   check("power: tapping a row in 'all queues' selects that queue", doc.querySelector(".pw-q.on").dataset.pq === "1-І");
   check("power: interval list for selected queue", /1 доба|24:00|24 год/.test(doc.querySelector(".av-list").textContent) || doc.querySelectorAll(".av-list .av-row").length >= 1);
+  // скасування обмежень: відключення за графіком стають "можливими", а не реальними
+  pdays[pkeys[0]].levels = [{ s: 0, e: 1440, n: 0, text: "без обмежень" }];
+  await click('[data-t="sch"]', 250); await click('[data-t="pw"]', 450);
+  await click('.pw-q[data-pq="1-І"]');
+  check("power: cancelled restrictions -> 'electricity is on', graph not in force", pwHero().classList.contains("ok") && /Світло є/.test(pwHero().textContent) && /не діє|скасовано/.test(pwHero().textContent) && !/Світла немає/.test(pwHero().textContent));
+  const chartTrack = doc.querySelector("section.av-card .av-24-track");
+  check("power: outages drawn as hatched 'possible', not solid red", chartTrack.querySelectorAll("i.pos").length >= 1 && chartTrack.querySelectorAll("i.rd").length === 0);
+  check("power: list row marked as possible + legend", doc.querySelectorAll(".av-row.is-pos").length >= 1 && /можливі \(графік не діє\)/.test(text("app")));
+  check("power: no 'next outage' promise while cancelled", !/Наступне відключення/.test(pwHero().textContent));
+  pdays[pkeys[0]].levels = [{ s: 0, e: 1440, n: 2, text: "2 черги" }];          // повертаємо дію графіка
+  await click('[data-t="sch"]', 250); await click('[data-t="pw"]', 450);
+  await click('.pw-q[data-pq="1-І"]');
+  check("power: restrictions back -> solid outage again", pwHero().classList.contains("rd") && doc.querySelector("section.av-card .av-24-track").querySelectorAll("i.rd").length >= 1);
   await click('[data-pday="' + pkeys[1] + '"]');
   check("power: tomorrow summary", /Завтра/.test(pwHero().textContent) && !pwHero().classList.contains("rd"));
   check("power: DPEM notes and source link", /Примітки ДПЕМ/.test(text("app")) && /info\.dpem\.mk\.ua/.test(doc.getElementById("app").innerHTML));

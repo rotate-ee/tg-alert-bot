@@ -332,6 +332,9 @@ input.av-sw:checked{background:var(--ac);border-color:transparent}input.av-sw:ch
 @media(max-width:430px){.tabs{gap:3px;padding-left:6px;padding-right:6px}.tabs .theme-toggle{flex-basis:38px;min-width:38px;min-height:38px}.tabs button span{font-size:10px;letter-spacing:-.02em}}
 @media(max-width:380px){.tabs button span{font-size:9px}.tabs button{padding-left:1px;padding-right:1px}}
 @media(max-width:345px){.tabs button span{font-size:8.5px;letter-spacing:-.04em}.tabs .theme-toggle{flex-basis:32px;min-width:32px}}
+.av-24-track i.pos{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--rd) 72%,transparent) 0 4px,transparent 4px 8px);outline:1px dashed color-mix(in srgb,var(--rd) 70%,transparent);outline-offset:-1px}
+.av-legend .pos{background:repeating-linear-gradient(135deg,var(--rd) 0 2px,transparent 2px 4px);outline:1px solid color-mix(in srgb,var(--rd) 70%,transparent);outline-offset:-1px}
+.av-bar.pos{background:repeating-linear-gradient(180deg,var(--rd) 0 4px,transparent 4px 8px);opacity:.75}.av-row.is-pos .av-row-main b{color:var(--hint)}
 </style>
 </head>
 <body>
@@ -565,19 +568,34 @@ let power=null,powerDay=null,powerQueue=null;
 try{powerQueue=localStorage.getItem("power_queue")}catch(e){}
 async function loadPower(){try{power=await get("/api/power")}catch(e){if(!power||power.error)power={error:true}}}
 const pwDur=v=>v.reduce((q,[a,b])=>q+b-a,0),pwRange=([a,b])=>`${hmm(a)}–${hmm(b)}`;
-const pwTrack=(v,c)=>v.map(([a,b])=>`<i class="${c}" style="${posStyle(a,b)}"></i>`).join("");
+/* Режим за вказівкою Укренерго: пізніший рядок перекриває ранній. Де "без обмежень" - відключення за графіком не діють, лише можливі. */
+const pwLevelAt=(lv,t)=>{let r=null;for(const l of lv||[])if(t>=l.s&&t<l.e)r=l;return r};
+function pwSegs(v,lv){const out=[];
+ v.forEach(([a,b])=>{const pts=new Set([a,b]);(lv||[]).forEach(l=>{if(l.s>a&&l.s<b)pts.add(l.s);if(l.e>a&&l.e<b)pts.add(l.e)});
+  const c=[...pts].sort((x,y)=>x-y);
+  for(let i=0;i<c.length-1;i++){const m=pwLevelAt(lv,(c[i]+c[i+1])/2),st=m&&m.n===0?"pos":"act",last=out[out.length-1];
+   if(last&&last.st===st&&last.b===c[i])last.b=c[i+1];else out.push({a:c[i],b:c[i+1],st})}});
+ return out}
+const pwSum=(g,st)=>g.filter(x=>x.st===st).reduce((q,x)=>q+x.b-x.a,0);
+const pwSegTrack=g=>g.map(x=>`<i class="${x.st==="pos"?"pos":"rd"}" style="${posStyle(x.a,x.b)}"></i>`).join("");
 const pwDayLabel=(d,t)=>d===t?"Сьогодні":d===iso(new Date(U(t).getTime()+D))?"Завтра":`${DN[wd(U(d))]} ${fd(d)}`;
 const pwWord=n=>n%10===1&&n%100!==11?"відключення":"відключень";
 function pwHero(q,day,D_,today){
- const v=D_.queues[q]||[],total=pwDur(v),now=kyiv(),cur=now.getUTCHours()*60+now.getUTCMinutes();
- const foot=`<div class="av-hero-foot"><span>Черга ${esc(q)}</span><span>${v.length?`Без світла за графіком: ${fmt(total)}`:"Без відключень"}</span></div>`;
+ const g=pwSegs(D_.queues[q]||[],D_.levels),act=g.filter(x=>x.st==="act"),pos=g.filter(x=>x.st==="pos"),ta=pwSum(g,"act"),tp=pwSum(g,"pos");
+ const now=kyiv(),cur=now.getUTCHours()*60+now.getUTCMinutes(),list=a=>a.slice(0,3).map(x=>pwRange([x.a,x.b])).join(", ");
+ const foot=`<div class="av-hero-foot"><span>Черга ${esc(q)}</span><span>${ta&&tp?`Без світла: ${fmt(ta)} · можливо ще ${fmt(tp)}`:ta?`Без світла за графіком: ${fmt(ta)}`:tp?`Можливі відключення: ${fmt(tp)}`:"Без відключень"}</span></div>`;
  const box=(c,kick,title,sub)=>`<section class="av-hero ${c}"><div class="av-hero-body"><span class="av-dot"></span><div><div class="av-kicker">${kick}</div><div class="av-title">${title}</div><div class="av-sub">${sub}</div></div></div>${foot}</section>`;
- if(day!==today)return box(v.length?"yl":"ok",pwDayLabel(day,today),v.length?`${v.length} ${pwWord(v.length)}`:"Відключень немає",v.length?v.map(pwRange).join(" · "):"На цей день світло за графіком не вимикають");
- const off=(D_.levels||[]).some(l=>l.n===0&&cur>=l.s&&cur<l.e),inside=v.find(([a,b])=>cur>=a&&cur<b),next=v.find(([a])=>a>cur);
- if(inside&&!off)return box("rd","Зараз за графіком","Світла немає",`До ${hmm(inside[1])} · ще ${fmt(inside[1]-cur)}`);
- if(inside&&off)return box("yl","За графіком відключення","Обмеження не діють","Зараз за вказівкою Укренерго обмежень немає, але графік може бути застосований знову");
- if(next)return box("ok","Зараз","Світло є",`Наступне відключення о ${hmm(next[0])} · через ${fmt(next[0]-cur)}`);
- return box("ok","Зараз","Світло є",v.length?"Відключень за графіком на сьогодні більше немає":"На сьогодні відключень не заплановано")}
+ const free="Обмеження скасовано: відключення за графіком не діють, але можливі, якщо обмеження введуть знову";
+ if(day!==today){
+  if(act.length)return box("yl",pwDayLabel(day,today),`${act.length} ${pwWord(act.length)}`,list(act)+(pos.length?` · можливі: ${list(pos)}`:""));
+  if(pos.length)return box("ok",pwDayLabel(day,today),"Графік не діє",`Без обмежень · можливі відключення: ${list(pos)}`);
+  return box("ok",pwDayLabel(day,today),"Відключень немає","На цей день світло за графіком не вимикають")}
+ const inAct=act.find(x=>cur>=x.a&&cur<x.b),inPos=pos.find(x=>cur>=x.a&&cur<x.b),nextAct=act.find(x=>x.a>cur),nextPos=pos.find(x=>x.a>cur);
+ if(inAct)return box("rd","Зараз за графіком","Світла немає",`До ${hmm(inAct.b)} · ще ${fmt(inAct.b-cur)}`);
+ if(inPos)return box("ok","Графік не діє","Світло є",free);
+ if(nextAct)return box("ok","Зараз","Світло є",`Наступне відключення о ${hmm(nextAct.a)} · через ${fmt(nextAct.a-cur)}`+(pos.length?` · можливі: ${list(pos)}`:""));
+ if(nextPos)return box("ok","Графік не діє","Світло є",`Без обмежень. Можливі відключення, якщо їх введуть: ${list(pos.filter(x=>x.a>cur))}`);
+ return box("ok","Зараз","Світло є",g.length?"Відключень за графіком на сьогодні більше немає":"На сьогодні відключень не заплановано")}
 function pwView(){
  const P=power;
  let h=`<main class="alerts-page"><div class="top"><div><h1>Світло</h1><small>ДПЕМ «Атомсервіс» · графіки відключень</small></div></div>`;
@@ -588,19 +606,19 @@ function pwView(){
  if(!S||!Object.keys(S.days).length)return h+`<div class="av-empty">Графік на сайті ДПЕМ поки не опубліковано.<br><br>${link}</div></main>`;
  const dates=Object.keys(S.days).sort(),today=iso(kyiv());
  const day=dates.includes(powerDay)?powerDay:(dates.includes(today)?today:(dates.find(d=>d>today)||dates[dates.length-1]));
- const q=P.queues.includes(powerQueue)?powerQueue:P.queues[0],D_=S.days[day],mine=D_.queues[q]||[];
+ const q=P.queues.includes(powerQueue)?powerQueue:P.queues[0],D_=S.days[day],mine=D_.queues[q]||[],segs=pwSegs(mine,D_.levels),actv=segs.filter(x=>x.st==="act");
  if(P.stale)h+=`<div class="av-stale" style="margin:0 0 12px">⚠️ Графік не оновлювався вже ${P.stale_minutes} хв<small>Дані з сайту ДПЕМ можуть бути неактуальними.</small></div>`;
  if(dates.length>1)h+=`<div class="av-chips">${dates.map(d=>`<button type="button" data-pday="${d}" class="${d===day?"on":""}">${pwDayLabel(d,today)}</button>`).join("")}</div>`;
  h+=`<section class="av-card"><div class="av-card-head"><b>Ваша черга</b><span>зберігається на пристрої</span></div><div class="pw-grid">${P.queues.map(x=>`<button type="button" class="pw-q${x===q?" on":""}" data-pq="${esc(x)}" aria-pressed="${x===q}">${esc(x)}</button>`).join("")}</div></section>`;
  h+=pwHero(q,day,D_,today);
  const dl=((st.days&&st.days[day]&&st.days[day].lessons)||[]).filter(l=>!l.cancelled&&l.start&&l.end),cur=(()=>{const n=kyiv();return n.getUTCHours()*60+n.getUTCMinutes()})();
- const hit=dl.filter(l=>mine.some(([a,b])=>mins(l.start)<b&&a<mins(F(l))));
- h+=`<section class="av-card"><div class="av-card-head"><b>Черга ${esc(q)}</b><span>${dayLabel(day)}</span></div><div class="av-24-track">${dl.map(l=>`<i class="ls" style="${posStyle(mins(l.start),mins(F(l)))}"></i>`).join("")}${pwTrack(mine,"rd")}${day===today?`<i class="now" style="left:${(cur/14.4).toFixed(2)}%"></i>`:""}</div>${TICKS}<div class="av-legend"><span><i class="rd"></i>немає світла</span>${dl.length?`<span><i class="ls"></i>уроки</span>`:""}${day===today?`<span><i class="nw"></i>зараз</span>`:""}</div>`;
- h+=mine.length?`<div class="av-list" style="margin-top:14px">${mine.map(([a,b])=>`<div class="av-row"><i class="av-bar rd"></i><div class="av-row-main"><b>${hmm(a)} – ${hmm(b)}</b><span>${fmt(b-a)} без світла</span></div></div>`).join("")}</div>`:`<div class="sm" style="margin-top:12px">За графіком на цей день відключень для черги ${esc(q)} немає.</div>`;
+ const hit=dl.filter(l=>actv.some(x=>mins(l.start)<x.b&&x.a<mins(F(l))));
+ h+=`<section class="av-card"><div class="av-card-head"><b>Черга ${esc(q)}</b><span>${dayLabel(day)}</span></div><div class="av-24-track">${dl.map(l=>`<i class="ls" style="${posStyle(mins(l.start),mins(F(l)))}"></i>`).join("")}${pwSegTrack(segs)}${day===today?`<i class="now" style="left:${(cur/14.4).toFixed(2)}%"></i>`:""}</div>${TICKS}<div class="av-legend"><span><i class="rd"></i>немає світла</span>${segs.some(x=>x.st==="pos")?`<span><i class="pos"></i>можливі (графік не діє)</span>`:""}${dl.length?`<span><i class="ls"></i>уроки</span>`:""}${day===today?`<span><i class="nw"></i>зараз</span>`:""}</div>`;
+ h+=segs.length?`<div class="av-list" style="margin-top:14px">${segs.map(x=>`<div class="av-row${x.st==="pos"?" is-pos":""}"><i class="av-bar ${x.st==="pos"?"pos":"rd"}"></i><div class="av-row-main"><b>${hmm(x.a)} – ${hmm(x.b)}</b><span>${x.st==="pos"?`${fmt(x.b-x.a)} · можливе відключення, якщо обмеження введуть знову`:`${fmt(x.b-x.a)} без світла`}</span></div></div>`).join("")}</div>`:`<div class="sm" style="margin-top:12px">За графіком на цей день відключень для черги ${esc(q)} немає.</div>`;
  if(hit.length)h+=`<div class="pw-hit">⚠️ Збігається з уроками: ${hit.map(l=>`${l.number}-й ${esc(l.name)}`).join(", ")}</div>`;
  h+=`</section>`;
  if((D_.levels||[]).length)h+=`<section class="av-card"><div class="av-card-head"><b>Режим обмежень</b><span>за вказівкою Укренерго</span></div><div class="av-24-track sm">${D_.levels.map(l=>`<i class="${l.n===0?"lv0":l.n?"lv1":"lvx"}" style="${posStyle(l.s,l.e)}"></i>`).join("")}</div>${TICKS}<div class="pw-levels">${D_.levels.map(l=>`<div><b>${hmm(l.s)}–${l.e>=1440?"окремої команди":hmm(l.e)}</b><span>${esc(l.text)}</span></div>`).join("")}</div><div class="av-legend"><span><i class="yl"></i>обмеження діють</span><span><i class="ok"></i>без обмежень</span></div><div class="sm" style="margin-top:8px">Графік діє лише в години, коли застосовуються обмеження.</div></section>`;
- h+=`<section class="av-card"><div class="av-card-head"><b>Усі черги</b><span>натисніть, щоб вибрати</span></div><div class="av-week-axis" style="grid-template-columns:42px 1fr"><span></span>${TICKS}</div>${P.queues.map(x=>`<button type="button" class="pw-row${x===q?" on":""}" data-pq="${esc(x)}"><b>${esc(x)}</b><div class="av-24-track sm">${pwTrack(D_.queues[x]||[],"rd")}</div></button>`).join("")}</section>`;
+ h+=`<section class="av-card"><div class="av-card-head"><b>Усі черги</b><span>натисніть, щоб вибрати</span></div><div class="av-week-axis" style="grid-template-columns:42px 1fr"><span></span>${TICKS}</div>${P.queues.map(x=>`<button type="button" class="pw-row${x===q?" on":""}" data-pq="${esc(x)}"><b>${esc(x)}</b><div class="av-24-track sm">${pwSegTrack(pwSegs(D_.queues[x]||[],D_.levels))}</div></button>`).join("")}</section>`;
  if(S.notes&&S.notes.length)h+=`<details class="admin-fold" style="margin-bottom:12px"><summary>Примітки ДПЕМ<span class="fold-meta">${S.notes.length}</span></summary><div class="admin-fold-body">${S.notes.map(n=>`<p style="margin:0 0 8px;font-size:14px">${esc(n)}</p>`).join("")}</div></details>`;
  const pub=S.published?`Опубліковано на сайті ${fd(S.published.slice(0,10))} о ${S.published.slice(11,16)}`:"",ago=P.fetched?Math.floor((Date.now()-Date.parse(P.fetched))/6e4):null;
  h+=`<div class="sm av-note">${pub}${ago!==null?` · перевірено ${ago<1?"щойно":ago<60?ago+" хв тому":Math.floor(ago/60)+" год тому"}`:""}<br>Джерело: ${link}. Графік може змінюватись протягом доби.</div>`;
