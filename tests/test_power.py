@@ -156,3 +156,123 @@ def test_failures_are_tracked_and_recovery_resets(monkeypatch):
     monkeypatch.setattr(power, "fetch_html", good)
     run(power.refresh(None))
     assert power.fail_count == 0 and power.last_error is None and power.stale_seconds() < 5
+
+
+# ---------- схожі символи та різні записи часу (регресія: «5-І: не вдалося розібрати «з 20:30 до 24:00»») ----------
+
+@pytest.mark.parametrize("text", [
+    "з 20:30 до 24:00",
+    "з 20:30 дo 24:00",          # латинська o в «до»
+    "3 20:30 до 24:00",          # цифра 3 замість «з»
+    "з 20.30 до 24.00",          # крапка замість двокрапки
+    "з 20:30 24:00",             # без слова «до»
+    "з 20:30 до 24:ОО",          # кириллична О замість нуля
+    "з 20:30 до 00:00",          # північ = кінець доби
+    "з 20:30 до кінця доби",
+    "з 20 : 30  до  24 : 00",
+])
+def test_end_of_day_interval_is_understood_in_any_spelling(text):
+    warnings = []
+    assert power._intervals(text, warnings, "5-І") == [[1230, 1440]]
+    assert not any("не вдалося" in w for w in warnings)
+
+
+def test_midnight_end_is_not_reported_as_a_problem():
+    warnings = []
+    assert power._intervals("з 20:30 до 00:00", warnings, "5-І") == [[1230, 1440]] and warnings == []
+
+
+def test_several_intervals_with_mixed_spellings():
+    assert power._intervals("з 00:00 дo 01:30, 3 18.30 до 22:30;", [], "1-І") == [[0, 90], [1110, 1350]]
+
+
+def test_unparseable_text_is_reported_with_exact_characters_not_lost_silently():
+    warnings = []
+    assert power._intervals("з вечора до ранку", warnings, "4-І") == []
+    assert len(warnings) == 1 and "не вдалося розібрати" in warnings[0] and "\\u0432" in warnings[0]   # видно коди символів
+    assert power._intervals("відключень не передбачено", [], "4-І") == []                                # це не помилка
+
+
+def test_queue_line_with_corrupted_words_is_still_recognized():
+    html = FIXTURE.replace("5 черга, 5-І підчерга - з 11:30 до 15:30;", "5 черга, 5-І пiдчерга - з 20:30 дo 24:00;")   # латинська i та o
+    snap = parse(html)
+    assert snap["days"]["2026-11-08"]["queues"]["5-І"] == [[1230, 1440]]
+    assert not any("5-І" in w for w in snap["warnings"])
+
+
+def test_real_sample_unchanged_after_parser_rewrite():
+    q = parse()["days"]["2026-11-08"]["queues"]
+    assert q["1-І"] == [[0, 90], [1110, 1350]] and q["2-ІІ"] == [[60, 300], [1320, 1440]] and q["2-І"] == [[1320, 1440]]
+
+
+# ---------- сайт набирають вручну: "схожі" символи не повинні ламати розбір ----------
+
+@pytest.mark.parametrize("variant", [
+    "з 20:30 до 24:00",
+    "з 2О:30 до 24:00",          # кирилична "О" замість нуля
+    "з 20:30 до 24:OO",          # латинські "OO" замість нулів
+    "з 20:30 дo 24:00",          # латинська "o" в слові "до"
+    "з 20.30 до 24.00",          # крапка замість двокрапки
+    "з 20\u223630 до 24\u223600",  # "∶" (знак відношення) замість ":"
+    "з 20：30 до 24：00",         # повноширинна двокрапка
+    "з\u00a020:30\u00a0до\u00a024:00",
+    "З 20:30 ДО 24:00",
+])
+def test_end_of_day_interval_survives_lookalike_characters(variant):
+    html = FIXTURE.replace("5 черга, 5-І підчерга - з 11:30 до 15:30;", f"5 черга, 5-І підчерга - {variant};")
+    snap = parse(html)
+    assert snap["days"]["2026-11-08"]["queues"]["5-І"] == [[1230, 1440]]       # "до кінця доби"
+    assert not any("5-І" in w for w in snap["warnings"])
+
+
+def test_levels_also_tolerate_lookalikes():
+    html = FIXTURE.replace("з 00:00 до 08:39 - 2 черги;", "з 0О:00 дo 08.39 - 2 черги;")
+    assert parse(html)["days"]["2026-11-08"]["levels"][0]["e"] == 519
+
+
+def test_unparseable_text_is_reported_with_character_codes():
+    html = FIXTURE.replace("5 черга, 5-І підчерга - з 11:30 до 15:30;", "5 черга, 5-І підчерга - з вечора до ранку\u2026;")
+    warnings = [w for w in parse(html)["warnings"] if "5-І" in w]
+    assert warnings and "не вдалося розібрати" in warnings[0] and "\\u2026" in warnings[0]   # адмін бачить код дивного символу
+
+
+def test_no_outage_wording_is_not_a_warning():
+    html = FIXTURE.replace("5 черга, 5-І підчерга - з 11:30 до 15:30;", "5 черга, 5-І підчерга - відключень немає;")
+    snap = parse(html)
+    assert snap["days"]["2026-11-08"]["queues"]["5-І"] == [] and not any("5-І" in w for w in snap["warnings"])
+
+
+# ---------- скасування обмежень ----------
+
+LEVELS_BLOCK = "з 00:00 до 08:39 - 2 черги;<br>\nз 08:39 до 09:17 - 1 черга;<br>\nз 09:00 до окремої команди - без обмежень.<br>"
+
+
+def with_levels(text):
+    assert LEVELS_BLOCK in FIXTURE
+    return parse(FIXTURE.replace(LEVELS_BLOCK, text))
+
+
+def test_message_says_when_restrictions_are_cancelled_or_return():
+    active = with_levels("з 00:00 до окремої команди - 2 черги.<br>")
+    whole_day = with_levels("з 00:00 до окремої команди - без обмежень.<br>")
+    from_nine = with_levels("з 00:00 до 09:00 - 2 черги;<br>\nз 09:00 до окремої команди - без обмежень.<br>")
+    text = power.format_change(active, whole_day, power.diff(active, whole_day))
+    assert "На весь день обмежень немає" in text and "графік лишається" in text
+    text = power.format_change(active, from_nine, power.diff(active, from_nine))
+    assert "З 09:00 обмежень немає" in text
+    text = power.format_change(whole_day, active, power.diff(whole_day, active))
+    assert "знову застосовуються" in text
+
+
+def test_cancel_note_is_not_repeated_when_only_a_queue_changes():
+    whole_day = with_levels("з 00:00 до окремої команди - без обмежень.<br>")
+    changed = parse(FIXTURE.replace(LEVELS_BLOCK, "з 00:00 до окремої команди - без обмежень.<br>").replace("з 04:30 до 08:30;<br>\n3 черга, 3-ІІ", "з 05:00 до 09:00;<br>\n3 черга, 3-ІІ"))
+    text = power.format_change(whole_day, changed, power.diff(whole_day, changed))
+    assert "3 черга (3-І)" in text and "обмежень немає" not in text
+
+
+def test_new_day_that_is_already_cancelled_mentions_it():
+    base = parse()
+    new = parse(FIXTURE.replace("07&nbsp;листопада 2026 20:24", "Графіки погодинних відключень на: 09.11.2026<br>з 00:00 до окремої команди - без обмежень.<br>Прогнозований графік погодинних відключень на 09.11.2026р.<br>1 черга, 1-І підчерга - з 06:00 до 10:00;<br>07 листопада 2026 20:24"))
+    text = power.format_change(base, new, power.diff(base, new))
+    assert "На весь день обмежень немає" in text and "новий графік" in text

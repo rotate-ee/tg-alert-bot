@@ -43,7 +43,9 @@ TS_RE = re.compile(r"^(\d{1,2})\s+([А-Яа-яІіЇїЄєҐґ]+)\s+(\d{4})\s+(\
 DATE_PART = r"(\d{1,2})\.(\d{1,2})\.(\d{4})"
 APPLIED_HEAD_RE = re.compile(r"погодинних\s+відключень\s+на\s*:?\s*" + DATE_PART, re.I)
 FORECAST_HEAD_RE = re.compile(r"Прогнозован\w*\s+графік\w*[^\n]*?\bна\s*:?\s*" + DATE_PART, re.I)
-LEVEL_RE = re.compile(r"^з\s*(\d{1,2}):(\d{2})\s*до\s*(?:(\d{1,2}):(\d{2})|окремої\s+команди)\s*[-–—]\s*(.+?)\s*[;.]?$", re.I)
+# Час набирають вручну: нуль буває літерою О/o, двокрапка - крапкою або схожим символом (∶ ：), "до" - з латинською "o".
+_T = r"([0-9OОоo]{1,2})\s*[:.\u2236\uff1a\ua789]\s*([0-9OОоo]{2})"
+LEVEL_RE = re.compile(r"^[зЗ]\s*" + _T + r"\s*(?:д[оo]|[пp][оo]|[-–—])\s*(?:" + _T + r"|окремої\s+команди)\s*[-–—]\s*(.+?)\s*[;.]?$", re.I)
 FORECAST_RE = re.compile(r"^(\d)\s*черг\w*\s*,\s*(\d)\s*[-–—]\s*([IІ]{1,2}|[12])\s*підчерг\w*\s*[-–—]\s*(.*?)\s*[;.]?$", re.I)
 INTERVAL_RE = re.compile(r"з\s*(\d{1,2}):(\d{2})\s*(?:до|по|[-–—])\s*(\d{1,2}):(\d{2})", re.I)
 ATTENTION_ONLY_RE = re.compile(r"^\W*УВАГА\W*$", re.I)
@@ -80,7 +82,7 @@ def _label(queue_no: str, roman: str) -> str | None:
 
 
 def _minutes(h: str, m: str) -> int | None:
-    h, m = int(h), int(m)
+    h, m = int(h.translate(HOMOGLYPH_ZERO)), int(m.translate(HOMOGLYPH_ZERO))
     if m > 59 or h > 24 or (h == 24 and m):
         return None
     return h * 60 + m
@@ -96,22 +98,47 @@ def _merge(intervals: list[list[int]]) -> list[list[int]]:
     return out
 
 
+# Час шукаємо як "ГГ:ХХ" (або "ГГ.ХХ"), а слова навколо ("з", "до", тире) ігноруємо: на сайті трапляються
+# схожі символи (латинська "o" замість "о", цифра "3" замість "з", кириллична "О" в "00" тощо).
+TIME_TOKEN_RE = re.compile(r"(?<![\d:.])" + _T + r"(?!\d)")
+HOMOGLYPH_ZERO = str.maketrans({"O": "0", "О": "0", "o": "0", "о": "0"})
+END_OF_DAY_RE = re.compile(r"кінця\s+(?:доби|дня)", re.I)
+NO_OUTAGE_RE = re.compile(r"без\s+відключ|відсутн|не\s+передбач|немає|не\s+плану", re.I)
+# Рядок підчерги з пошкодженими словами ("пiдчерга" з латинською i тощо): шукаємо "N-І ... - інтервали"
+LOOSE_FORECAST_RE = re.compile(r"(?<!\d)([1-6])\s*[-–—]\s*(І{1,2}|I{1,2}|[12])(?![\wА-Яа-яІіЇї])[^-–—]*[-–—]\s*(.+)$", re.I)
+
+
 def _intervals(text: str, warnings: list[str], label: str) -> list[list[int]]:
+    tokens = []
+    for m in TIME_TOKEN_RE.finditer(text):
+        tokens.append((m.group(0), _minutes(m.group(1).translate(HOMOGLYPH_ZERO), m.group(2).translate(HOMOGLYPH_ZERO))))
     found = []
-    for m in INTERVAL_RE.finditer(text):
-        s, e = _minutes(m.group(1), m.group(2)), _minutes(m.group(3), m.group(4))
-        if s is None or e is None:
-            warnings.append(f"{label}: некоректний час «{m.group(0)}»")
-        elif s == e:
-            warnings.append(f"{label}: порожній інтервал «{m.group(0)}» (початок дорівнює кінцю), пропущено")
-        elif e < s:
-            warnings.append(f"{label}: інтервал через північ «{m.group(0)}», враховано до 24:00")
-            found.append([s, 1440])
+    for k in range(0, len(tokens), 2):
+        raw_start, start = tokens[k]
+        if k + 1 < len(tokens):
+            raw_end, end = tokens[k + 1]
+        else:  # "з 20:30 до кінця доби"
+            raw_end, end = "кінця доби", (1440 if END_OF_DAY_RE.search(text) else None)
+        shown = f"з {raw_start} до {raw_end}"
+        if start is None or end is None:
+            warnings.append(f"{label}: некоректний час «{shown}»")
+        elif start == end:
+            warnings.append(f"{label}: порожній інтервал «{shown}» (початок дорівнює кінцю), пропущено")
+        elif end == 0:
+            found.append([start, 1440])  # "до 00:00" - до кінця доби
+        elif end < start:
+            warnings.append(f"{label}: інтервал через північ «{shown}», враховано до 24:00")
+            found.append([start, 1440])
         else:
-            found.append([s, e])
-    if not found and re.search(r"\d{1,2}:\d{2}", text):
-        warnings.append(f"{label}: не вдалося розібрати «{text[:60]}»")
+            found.append([start, end])
+    if not found and not warnings_for(label, warnings) and text.strip() and not NO_OUTAGE_RE.search(text):
+        # нічого не розібрали і сайт не сказав "відключень немає": не губимо мовчки, а показуємо адміну символи
+        warnings.append(f"{label}: не вдалося розібрати «{text.strip()[:60]}» ({ascii(text.strip()[:40])})")
     return _merge(found)
+
+
+def warnings_for(label: str, warnings: list[str]) -> bool:
+    return any(w.startswith(label + ":") for w in warnings)
 
 
 def _iso(d: str, m: str, y: str) -> str:
@@ -178,13 +205,17 @@ def parse_html(raw: str) -> dict:
             day(target)["levels"].append({"s": s, "e": e, "n": n, "text": text})
             continue
         m = FORECAST_RE.match(ln)
-        if m and (forecast_date or applied_date):
+        loose = None
+        if not m and (forecast_date or applied_date) and TIME_TOKEN_RE.search(ln):
+            loose = LOOSE_FORECAST_RE.search(ln)
+        if (m or loose) and (forecast_date or applied_date):
             seen_forecast = True
-            label = _label(m.group(2), m.group(3))
+            no, roman, tail = (m.group(2), m.group(3), m.group(4)) if m else (loose.group(1), loose.group(2), loose.group(3))
+            label = _label(no, roman)
             if label is None:
                 warnings.append(f"Невідома підчерга: «{ln[:50]}»")
                 continue
-            day(forecast_date or applied_date)["queues"][label] = _intervals(m.group(4), warnings, label)
+            day(forecast_date or applied_date)["queues"][label] = _intervals(tail, warnings, label)
             continue
         if VIEW_LINK_RE.search(ln) or ATTENTION_ONLY_RE.match(ln):
             continue
@@ -271,6 +302,21 @@ def _level_text(lv: dict) -> str:
     return f"з {_hhmm(lv['s'])} до {end} — {lv['text']}"
 
 
+def _cancel_note(old_day: dict | None, new_day: dict) -> str | None:
+    """Окремий рядок, коли обмеження скасували ("без обмежень") або знову ввели."""
+    def free_from(day):
+        starts = [lv["s"] for lv in (day or {}).get("levels", []) if lv["n"] == 0]
+        return min(starts) if starts else None
+    was, now = free_from(old_day), free_from(new_day)
+    if now is not None and was is None:
+        whole = any(lv["n"] == 0 and lv["s"] == 0 and lv["e"] >= 1440 for lv in new_day["levels"])
+        when = "На весь день" if whole else f"З {_hhmm(now)}"
+        return f"✅ {when} обмежень немає: відключення за графіком не застосовуються (графік лишається на випадок їх повернення)"
+    if was is not None and now is None:
+        return "⚠️ Обмеження знову застосовуються: діє графік нижче"
+    return None
+
+
 def format_change(old: dict | None, new: dict, d: dict) -> str | None:
     """HTML-повідомлення для чату про зміну графіка (None - нічого розповідати)."""
     from html import escape
@@ -282,6 +328,9 @@ def format_change(old: dict | None, new: dict, d: dict) -> str | None:
         title = f"<b>На {key[8:10]}.{key[5:7]} ({wd})</b>" + (" · <i>новий графік</i>" if key in d["new_days"] else "")
         lines = [title]
         info = d["days"].get(key, {"queues": [], "levels": True})
+        note = _cancel_note((old or {}).get("days", {}).get(key), day) if (key in d["new_days"] or info["levels"]) else None
+        if note:
+            lines.append(escape(note))
         if day["levels"] and (key in d["new_days"] or info["levels"]):
             lines += ["<u>Режим обмежень</u>"] + [escape(_level_text(lv)) for lv in day["levels"]]
         only = None if key in d["new_days"] else info["queues"]
