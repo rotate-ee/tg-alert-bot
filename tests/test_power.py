@@ -102,7 +102,7 @@ def test_message_for_changed_queue_lists_only_that_group_and_escapes_html():
     new = variant("3 черга, 3-І підчерга - з 04:30 до 08:30;", "3 черга, 3-І підчерга - з 05:00 до 09:00;")
     text = power.format_change(base, new, power.diff(base, new))
     assert "Зміни за чергами" in text and "3 черга (3-І): 05:00–09:00" in text
-    assert "1 черга" not in text and "/app" in text and "07.11 о 20:24" in text and "(нд)" in text
+    assert "1 черга" not in text and "/app" not in text and "07.11 о 20:24" in text and "(нд)" in text
     new["days"]["2026-11-08"]["levels"][0]["text"] = "<b>2 черги</b>"
     assert "&lt;b&gt;2 черги" in power.format_change(base, new, {"new_days": [], "days": {"2026-11-08": {"queues": [], "levels": True}}, "notes": False})
 

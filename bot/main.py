@@ -75,6 +75,41 @@ if not _pub and os.getenv("RAILWAY_PUBLIC_DOMAIN"):
 BOT_PUBLIC_URL = _pub
 
 
+APP_BUTTON_TEXT = "📅 Відкрити застосунок"
+_bot_info: dict = {}
+
+
+async def _bot_meta() -> dict:
+    """Ім'я бота і чи налаштовано в BotFather головний міні-застосунок (кешується після першого успіху)."""
+    if "username" not in _bot_info:
+        try:
+            me = await bot.get_me()
+            _bot_info["username"] = me.username
+            _bot_info["main_app"] = getattr(me, "has_main_web_app", None)
+        except Exception:
+            log.warning("Не вдалося отримати дані бота (get_me)")
+            return {"username": None, "main_app": None}
+    return _bot_info
+
+
+async def app_keyboard(private: bool) -> InlineKeyboardMarkup | None:
+    """Кнопка "Відкрити застосунок" замість згадки команди /app. У приватному чаті - справжня web_app-кнопка,
+    у групах (де вони заборонені) - кнопка-посилання на застосунок."""
+    if private:
+        if not MINIAPP_URL:
+            return None
+        button = InlineKeyboardButton(text=APP_BUTTON_TEXT, web_app=WebAppInfo(url=_miniapp_url()))
+    else:
+        link = config.MINIAPP_LINK
+        if not link:
+            meta = await _bot_meta()
+            if not meta["username"] or not MINIAPP_URL:
+                return None
+            link = f"https://t.me/{meta['username']}" + ("?startapp" if meta["main_app"] else "?start=app")
+        button = InlineKeyboardButton(text=APP_BUTTON_TEXT, url=link)
+    return InlineKeyboardMarkup(inline_keyboard=[[button]])
+
+
 def _miniapp_url() -> str:
     if not MINIAPP_URL:
         return ""
@@ -131,6 +166,11 @@ async def cmd_help(message: Message):
             users.record_start(message.from_user.model_dump())  # статистика запусків бота
         except Exception:
             log.exception("Не вдалося записати запуск бота")
+    private = message.chat.type == "private"
+    kb = await app_keyboard(private)
+    if private and kb and (message.text or "").split()[1:] == ["app"]:  # посилання t.me/<бот>?start=app
+        await message.answer("📅 Розклад, тривоги й графіки світла в застосунку:", reply_markup=kb)
+        return
     text = (
         f"👋 <b>Вітаю!</b> Я повідомляю про повітряні тривоги в <b>{escape(config.REGION_TITLE)}</b> "
         "і допомагаю швидко перевірити розклад уроків.\n\n"
@@ -138,7 +178,6 @@ async def cmd_help(message: Message):
         "<code>/now</code> — поточний або наступний урок\n"
         "<code>/today</code> — розклад на сьогодні\n"
         "<code>/week</code> — розклад на тиждень"
-        + ("\n<code>/app</code> — відкрити розклад у застосунку" if MINIAPP_URL else "")
     )
     if message.chat.type == "private" and message.from_user.id in config.ADMIN_IDS:
         text += (
@@ -152,7 +191,7 @@ async def cmd_help(message: Message):
             "<code>/announce</code> — надіслати оголошення в чат\n"
             "<code>/endnow</code> / <code>/undoend</code> — керувати позначкою раннього завершення"
         )
-    await message.answer(text, parse_mode=ParseMode.HTML)
+    await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=kb)
 
 
 @dp.message(Command("app"))
@@ -160,13 +199,11 @@ async def cmd_app(message: Message):
     if not MINIAPP_URL:
         await message.answer("Міні-застосунок не налаштовано (MINIAPP_URL).")
         return
-    if message.chat.type != "private":
-        await message.answer("Відкрийте міні-застосунок в особистих повідомленнях з ботом: /app")
+    kb = await app_keyboard(message.chat.type == "private")
+    if not kb:
+        await message.answer("Міні-застосунок не налаштовано.")
         return
-    kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="📅 Відкрити розклад", web_app=WebAppInfo(url=_miniapp_url()))
-    ]])
-    await message.answer("Розклад у міні-застосунку:", reply_markup=kb)
+    await message.answer("📅 Розклад, тривоги й графіки світла:", reply_markup=kb)
 
 
 # ---------- команды отмены уроков (только в ЛС, только для админов) ----------
@@ -899,7 +936,7 @@ async def _personal_alert(event: str, level: str | None) -> None:
             emoji, label = _level_emoji_and_label(level)
             head = "Тривога" if event == "started" else "Рівень змінився"
             text = f"{emoji} <b>{head} · {escape(config.REGION_TITLE)}</b>\n{escape(label)}"
-        await notify.send_to_subscribers(bot, "alerts", text)
+        await notify.send_to_subscribers(bot, "alerts", text, reply_markup=await app_keyboard(private=True))
     except Exception:
         log.exception("Помилка особистих сповіщень про тривогу")
 
@@ -916,7 +953,8 @@ async def _notify_power_change(old, new, change) -> None:
         return
     text = power.format_change(old, new, change)
     if text:
-        await bot.send_message(config.CHAT_ID, text, parse_mode=ParseMode.HTML, disable_notification=_power_silent())
+        await bot.send_message(config.CHAT_ID, text, parse_mode=ParseMode.HTML, disable_notification=_power_silent(),
+                               reply_markup=await app_keyboard(private=False))
 
 
 async def watch_power():
@@ -979,7 +1017,7 @@ WEEKDAYS_UK = ["пн", "вт", "ср", "чт", "пт", "сб", "нд"]
 def _changes_text(date_iso: str, lines: list[str]) -> str:
     d = date.fromisoformat(date_iso)
     return (f"📝 <b>Зміни в розкладі · {d.strftime('%d.%m')} ({WEEKDAYS_UK[d.weekday()]})</b>\n"
-            + "\n".join(f"• {escape(line)}" for line in lines) + "\n\nДивіться застосунок: /app")
+            + "\n".join(f"• {escape(line)}" for line in lines))
 
 
 async def changes_dispatcher():
@@ -988,7 +1026,8 @@ async def changes_dispatcher():
         await asyncio.sleep(10)
         try:
             for date_iso, lines, _actors in notify.due_changes():
-                await notify.send_to_subscribers(bot, "changes", _changes_text(date_iso, lines))
+                await notify.send_to_subscribers(bot, "changes", _changes_text(date_iso, lines),
+                                             reply_markup=await app_keyboard(private=True))
         except asyncio.CancelledError:
             raise
         except Exception:

@@ -90,6 +90,11 @@ ALERT_STALE_SECONDS = int(os.getenv("ALERT_STALE_SECONDS", "180"))
 # о цій годині (Europe/Kyiv, ЧЧ:ММ). "off" - вимкнути.
 BACKUP_TIME = os.getenv("BACKUP_TIME", "03:30").strip()
 
+# Пряме посилання на міні-застосунок для кнопки в групових чатах (там кнопки web_app заборонені), напр.
+# https://t.me/my_bot/app. Порожньо - бот збирає посилання сам (t.me/<бот>?startapp, якщо в BotFather налаштовано
+# головний застосунок, інакше t.me/<бот>?start=app, що відкриває чат з кнопкою).
+MINIAPP_LINK = os.getenv("MINIAPP_LINK", "").strip()
+
 # Графіки відключень світла (ГПВ) з сайту ДПЕМ "Атомсервіс": оперативний блок на головній сторінці.
 POWER_ENABLED = os.getenv("POWER_ENABLED", "1").strip().lower() not in ("0", "false", "off", "no")
 POWER_URL = os.getenv("POWER_URL", "https://info.dpem.mk.ua/index.html").strip()

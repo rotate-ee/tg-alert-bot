@@ -186,6 +186,7 @@ const click = async (sel, wait = 250) => { const el = doc.querySelector(sel); if
   check("admin: users/starts and broadcast folds present", folds.some(t => /Користувачі та запуски/.test(t)) && folds.some(t => /Розсилка в ЛС/.test(t)));
   const usersFold = [...doc.querySelectorAll(".admin-fold")].find(f => /Користувачі та запуски/.test(f.textContent));
   check("admin: starts KPIs, per-day chart and recent starters", usersFold.querySelectorAll(".av-kpi").length === 4 && !!usersFold.querySelector("svg.av-svg") && usersFold.querySelectorAll(".av-row").length >= 1);
+  check("admin: system panel shows the app-button status", /app_button/.test(text("app")));
   const backupBtn = doc.getElementById("backup-send");
   check("admin: backup button present", !!backupBtn);
   if (backupBtn) { backupBtn.click(); await sleep(400); }

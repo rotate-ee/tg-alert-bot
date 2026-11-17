@@ -14,7 +14,7 @@ import pytest
 DATA = tempfile.mkdtemp(prefix="botdata_")
 os.environ.update(
     BOT_TOKEN="123:test-token", CHAT_ID="1", ALERTS_TOKEN="x", ADMIN_IDS="42",
-    DATA_DIR=DATA, SCHOOL_WEEK_ANCHOR_MONDAY="2026-09-07", DUTY_STUDENTS="[]",
+    DATA_DIR=DATA, SCHOOL_WEEK_ANCHOR_MONDAY="2026-09-07", DUTY_STUDENTS="[]", MINIAPP_URL="https://app.example/index.html",
 )
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "bot"))
 

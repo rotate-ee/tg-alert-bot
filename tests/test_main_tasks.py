@@ -13,10 +13,11 @@ K = ZoneInfo("Europe/Kyiv")
 
 class FakeBot:
     def __init__(self):
-        self.sent = []
+        self.sent, self.markups = [], []
 
-    async def send_message(self, uid, text, parse_mode=None):
+    async def send_message(self, uid, text, parse_mode=None, reply_markup=None):
         self.sent.append((uid, text))
+        self.markups.append(reply_markup)
 
 
 @pytest.fixture
@@ -45,6 +46,7 @@ def test_changes_text_is_escaped_and_dated(main_module):
     main, _ = main_module
     text = main._changes_text("2026-11-05", ["3-й урок (Хімія): скасовано", "<b>HTML</b>"])
     assert "05.11" in text and "(чт)" in text and "&lt;b&gt;HTML" in text and "• 3-й урок" in text
+    assert "/app" not in text                                          # замість команди - кнопка під повідомленням
 
 
 def test_changes_dispatcher_sends_batched_message(main_module, monkeypatch):
@@ -57,6 +59,7 @@ def test_changes_dispatcher_sends_batched_message(main_module, monkeypatch):
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(main.changes_dispatcher())
     assert len(bot.sent) == 1 and bot.sent[0][0] == 5 and bot.sent[0][1].count("•") == 2
+    assert bot.markups[0].inline_keyboard[0][0].web_app.url.startswith("https://app.example/")   # у ЛС - web_app-кнопка
 
 
 def test_watch_staleness_warns_once_and_reports_recovery(main_module, monkeypatch):

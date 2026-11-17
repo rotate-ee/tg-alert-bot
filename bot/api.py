@@ -318,7 +318,9 @@ async def _bot_username(app: web.Application) -> str | None:
     if app.get("bot_username"):
         return app["bot_username"]
     try:
-        app["bot_username"] = (await app["bot"].get_me()).username
+        me = await app["bot"].get_me()
+        app["bot_username"] = me.username
+        app["bot_main_app"] = getattr(me, "has_main_web_app", None)
     except Exception:
         return None
     return app["bot_username"]
@@ -669,6 +671,7 @@ async def a_overview(request: web.Request) -> web.Response:
             "files": files,
             "uptime_min": int((_time.time() - STARTED_AT) // 60),
             "admins": len(config.ADMIN_IDS),
+            "main_app": (await _bot_username(request.app), request.app.get("bot_main_app"))[1],
             "region": config.REGION_TITLE,
         },
     })

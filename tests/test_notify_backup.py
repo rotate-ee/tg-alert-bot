@@ -15,7 +15,8 @@ class FakeBot:
     def __init__(self, blocked=()):
         self.sent, self.blocked = [], set(blocked)
 
-    async def send_message(self, uid, text, parse_mode=None):
+    async def send_message(self, uid, text, parse_mode=None, reply_markup=None):
+        self.markup = reply_markup
         if uid in self.blocked:
             raise TelegramForbiddenError(method=SendMessage(chat_id=uid, text=text), message="Forbidden: bot was blocked by the user")
         self.sent.append((uid, text))
@@ -35,6 +36,13 @@ def test_send_removes_users_who_blocked_the_bot():
     assert [u for u, _ in bot.sent] == [1]
     assert notify.get_topics(2) == []  # заблокував бота -> автоматично відписаний
     assert notify.get_topics(1) == ["alerts"]
+
+
+def test_send_passes_the_button_through():
+    notify.set_topics(1, ["alerts"])
+    bot = FakeBot()
+    asyncio.run(notify.send_to_subscribers(bot, "alerts", "тест", reply_markup="KB"))
+    assert bot.markup == "KB"
 
 
 def test_changes_are_batched_and_deduplicated():

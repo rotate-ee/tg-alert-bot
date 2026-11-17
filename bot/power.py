@@ -347,7 +347,7 @@ def format_change(old: dict | None, new: dict, d: dict) -> str | None:
         p = datetime.fromisoformat(new["published"])
         pub = f"\n<i>Опубліковано на сайті ДПЕМ {p:%d.%m о %H:%M}</i>"
     text = "⚡️ <b>Графік відключень світла оновлено</b>" + pub + "\n\n" + "\n\n".join(blocks)
-    text += "\n\nСвоя черга та графіки: /app → «Світло». Протягом доби графік може змінюватись."
+    text += "\n\nПротягом доби графік може змінюватись."
     return text[:3900]
 
 

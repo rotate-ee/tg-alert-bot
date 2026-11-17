@@ -19,10 +19,17 @@ FIXTURE = (Path(__file__).parent / "fixtures" / "dpem_index.html").read_text(enc
 
 class FakeBot:
     def __init__(self):
-        self.sent = []
+        self.sent, self.markups = [], []
+
+    async def get_me(self):
+        class Me:
+            username = "test_bot"
+            has_main_web_app = True
+        return Me()
 
     async def send_message(self, chat_id, text, parse_mode=None, disable_notification=False, **kw):
         self.sent.append((chat_id, text, disable_notification))
+        self.markups.append(kw.get("reply_markup"))
 
 
 @pytest.fixture(autouse=True)
@@ -124,12 +131,16 @@ def main_module(monkeypatch):
 
 def test_chat_message_on_change_respects_setting_and_night_silence(main_module, monkeypatch):
     main, bot = main_module
+    main._bot_info.clear()
     base = power.parse_html(FIXTURE)
     new = power.parse_html(FIXTURE.replace("з 04:30 до 08:30;<br>\n3 черга, 3-ІІ", "з 05:00 до 09:00;<br>\n3 черга, 3-ІІ"))
     change = power.diff(base, new)
     monkeypatch.setattr(main, "_power_silent", lambda: False)
     asyncio.run(main._notify_power_change(base, new, change))
     assert len(bot.sent) == 1 and bot.sent[0][0] == main.config.CHAT_ID and "3 черга (3-І)" in bot.sent[0][1] and bot.sent[0][2] is False
+    assert "/app" not in bot.sent[0][1]
+    button = bot.markups[0].inline_keyboard[0][0]                      # у чаті - кнопка-посилання (web_app у групах заборонені)
+    assert button.text == "📅 Відкрити застосунок" and button.url == "https://t.me/test_bot?startapp" and button.web_app is None
     monkeypatch.setattr(main, "_power_silent", lambda: True)
     asyncio.run(main._notify_power_change(base, new, change))
     assert bot.sent[1][2] is True                                      # вночі - без звуку

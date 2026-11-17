@@ -56,7 +56,7 @@ def subscribers(topic: str) -> list[int]:
     return [int(uid) for uid, v in _load().items() if topic in v.get("topics", [])]
 
 
-async def send_to_subscribers(bot, topic: str, text: str, exclude: set[int] | None = None) -> int:
+async def send_to_subscribers(bot, topic: str, text: str, exclude: set[int] | None = None, reply_markup=None) -> int:
     """Розсилає HTML-повідомлення підписникам теми. Хто заблокував бота - автоматично відписується."""
     sent = 0
     for uid in subscribers(topic):
@@ -64,7 +64,7 @@ async def send_to_subscribers(bot, topic: str, text: str, exclude: set[int] | No
             continue
         for attempt in range(2):
             try:
-                await bot.send_message(uid, text, parse_mode="HTML")
+                await bot.send_message(uid, text, parse_mode="HTML", reply_markup=reply_markup)
                 sent += 1
                 break
             except TelegramRetryAfter as e:
