@@ -464,9 +464,12 @@ async def a_power_refresh(request: web.Request) -> web.Response:
     try:
         async with aiohttp.ClientSession() as session:
             result = await power.run_once(session)
-    except Exception:
+    except Exception as e:
+        reason = power.safe_error_message(e)
+        power.last_error = reason
+        power.fail_count = max(power.fail_count, 1)
         log.exception("Помилка ручного оновлення графіка відключень")
-        return web.json_response({"error": "fetch_failed"}, status=502)
+        return web.json_response({"error": "fetch_failed", "reason": reason}, status=502)
     return web.json_response({"ok": True, "changed": result["diff"] is not None, "first": result["first"],
                               "warnings": result["snapshot"]["warnings"]})
 

@@ -582,6 +582,7 @@ document.addEventListener("input",e=>{if(e.target&&e.target.id==="bc-text"){cons
 let power=null,powerDay=null,powerQueue=null;
 try{powerQueue=localStorage.getItem("power_queue")}catch(e){}
 async function loadPower(){try{power=await get("/api/power")}catch(e){if(!power||power.error)power={error:true}}}
+async function refreshPower(){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);try{const r=await fetch(API+"/api/admin/power/refresh",{method:"POST",headers:hdr(),body:"{}",signal:controller.signal});let data={};try{data=await r.json()}catch(e){}if(!r.ok)throw{status:r.status,reason:data.reason};return data}finally{clearTimeout(timer)}}
 const pwDur=v=>v.reduce((q,[a,b])=>q+b-a,0),pwRange=([a,b])=>`${hmm(a)}–${hmm(b)}`;
 /* Режим за вказівкою Укренерго: пізніший рядок перекриває ранній. Де "без обмежень" - відключення за графіком не діють, лише можливі. */
 const pwLevelAt=(lv,t)=>{let r=null;for(const l of lv||[])if(t>=l.s&&t<l.e)r=l;return r};
@@ -837,8 +838,8 @@ $("app").onclick=async e=>{const bar=e.target.closest("[data-bar]");if(bar){stat
  if(D_.pq){powerQueue=D_.pq;try{localStorage.setItem("power_queue",powerQueue)}catch(e){}hap();render();return}
  if(D_.pday){powerDay=D_.pday;hap();render();return}
  if(b.id==="pw-refresh"&&admin){if(actBusy)return;actBusy=true;b.disabled=true;
-  try{const r=await post("/api/admin/power/refresh",{});await loadPower();render();toast(r.first?"Графік отримано":r.changed?"Графік змінився, повідомлення надіслано в чат":"Змін на сайті немає")}
-  catch(x){await loadPower();render();toast(x===502?"Не вдалося оновити. Причина показана в керуванні":"Не вдалося оновити графік")}finally{actBusy=false;b.disabled=false}
+  try{const r=await refreshPower();await loadPower();render();toast(r.first?"Графік отримано":r.changed?"Графік змінився, повідомлення надіслано в чат":"Змін на сайті немає")}
+  catch(x){await loadPower();render();const reason=x?.reason||power?.last_error;toast(reason?`Не вдалося оновити: ${reason}`:"Не вдалося оновити графік")}finally{actBusy=false;b.disabled=false}
   return}
  
  if(D_.alertId!==undefined&&admin){const entry=st.alert.history.find(x=>x.id===D_.alertId);if(entry)openAlertSheet(entry);return}
