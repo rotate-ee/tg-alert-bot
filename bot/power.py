@@ -64,6 +64,27 @@ class ParseError(Exception):
     pass
 
 
+def safe_error_message(error: Exception) -> str:
+    """Коротка діагностика для адмінки без URL, заголовків чи тексту відповіді сервера."""
+    import aiohttp
+
+    if isinstance(error, ParseError):
+        return "Сайт ДПЕМ відповів, але блок графіка не знайдено — можливо, змінилася сторінка."
+    if isinstance(error, asyncio.TimeoutError):
+        return "Сайт ДПЕМ не відповів за 20 секунд."
+    if isinstance(error, aiohttp.ClientResponseError):
+        if error.status in (401, 403, 429):
+            return f"Сайт ДПЕМ відхилив запит (HTTP {error.status})."
+        if error.status >= 500:
+            return f"Сайт ДПЕМ тимчасово недоступний (HTTP {error.status})."
+        return f"Сайт ДПЕМ повернув помилку HTTP {error.status}."
+    if isinstance(error, aiohttp.ClientError):
+        return "Не вдалося встановити з’єднання із сайтом ДПЕМ."
+    if isinstance(error, (UnicodeError, LookupError)):
+        return "Не вдалося прочитати кодування сторінки ДПЕМ."
+    return "Не вдалося обробити відповідь сайту ДПЕМ. Подробиці є в журналі сервера."
+
+
 # ---------- парсинг ----------
 
 def html_to_text(raw: str) -> str:
@@ -370,7 +391,7 @@ async def refresh(session) -> dict:
             snapshot = parse_html(await fetch_html(session))
         except Exception as e:
             fail_count += 1
-            last_error = f"{type(e).__name__}: {e}"[:200]
+            last_error = safe_error_message(e)
             raise
         stored = load()
         previous = stored["snapshot"] if stored else None

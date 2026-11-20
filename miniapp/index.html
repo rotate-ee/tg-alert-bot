@@ -838,7 +838,7 @@ $("app").onclick=async e=>{const bar=e.target.closest("[data-bar]");if(bar){stat
  if(D_.pday){powerDay=D_.pday;hap();render();return}
  if(b.id==="pw-refresh"&&admin){if(actBusy)return;actBusy=true;b.disabled=true;
   try{const r=await post("/api/admin/power/refresh",{});await loadPower();render();toast(r.first?"Графік отримано":r.changed?"Графік змінився, повідомлення надіслано в чат":"Змін на сайті немає")}
-  catch(x){toast(x===502?"Не вдалося прочитати сайт ДПЕМ":"Не вдалося оновити")}finally{actBusy=false;b.disabled=false}
+  catch(x){await loadPower();render();toast(x===502?"Не вдалося оновити. Причина показана в керуванні":"Не вдалося оновити графік")}finally{actBusy=false;b.disabled=false}
   return}
  
  if(D_.alertId!==undefined&&admin){const entry=st.alert.history.find(x=>x.id===D_.alertId);if(entry)openAlertSheet(entry);return}
