@@ -51,18 +51,29 @@ _report_last_sent: dict[int, float] = {}
 def verify_init_data(init_data: str) -> dict | None:
     """Повертає user із initData, якщо підпис і свіжість в порядку."""
     try:
-        pairs = dict(parse_qsl(init_data, keep_blank_values=True))
+        # dict() мовчки залишає останнє значення повторного параметра.
+        if not isinstance(init_data, str) or not init_data or len(init_data) > 8192:
+            return None
+        items = parse_qsl(init_data, keep_blank_values=True, strict_parsing=True, max_num_fields=32)
+        if len({key for key, _ in items}) != len(items):
+            return None
+        pairs = dict(items)
         got = pairs.pop("hash", None)
-        if not got:
+        if not got or len(got) != 64 or any(c not in "0123456789abcdefABCDEF" for c in got):
+            return None
+        auth_date = int(pairs.get("auth_date", "0"))
+        now = int(_time.time())
+        if auth_date <= 0 or auth_date > now + 60 or now - auth_date > 86400:
             return None
         check = "\n".join(f"{k}={v}" for k, v in sorted(pairs.items()))
         secret = hmac.new(b"WebAppData", config.BOT_TOKEN.encode(), hashlib.sha256).digest()
         calc = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(calc, got):
             return None
-        if _time.time() - int(pairs.get("auth_date", "0")) > 86400:
+        user = json.loads(pairs["user"])
+        if not isinstance(user, dict) or type(user.get("id")) is not int or user["id"] <= 0:
             return None
-        return json.loads(pairs["user"])
+        return user
     except Exception:
         return None
 
@@ -151,7 +162,11 @@ async def _record_change(request: web.Request) -> None:
 
 @web.middleware
 async def cors(request: web.Request, handler):
-    if request.method == "OPTIONS":
+    origin = request.headers.get("Origin")
+    allowed_origins = _allowed_origins()
+    if origin and origin not in allowed_origins:
+        resp = web.json_response({"error": "origin_not_allowed"}, status=403)
+    elif request.method == "OPTIONS":
         resp = web.Response(status=204)
     else:
         try:
@@ -162,10 +177,33 @@ async def cors(request: web.Request, handler):
             resp = e
         except (ValueError, KeyError, TypeError):
             resp = web.json_response({"error": "bad_request"}, status=400)
-    resp.headers["Access-Control-Allow-Origin"] = "*"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Init-Data"
-    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    if origin and origin in allowed_origins:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Init-Data"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        resp.headers["Access-Control-Max-Age"] = "600"
+        resp.headers.add("Vary", "Origin")
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["Referrer-Policy"] = "no-referrer"
+    resp.headers["Cache-Control"] = "no-store"
     return resp
+
+
+def _allowed_origins() -> set[str]:
+    """Точні HTTPS-origin-и міні-застосунку та API; без wildcard CORS."""
+    raw_origins = [os.getenv("MINIAPP_URL", ""), os.getenv("BOT_PUBLIC_URL", "")]
+    raw_origins.extend(os.getenv("CORS_ALLOWED_ORIGINS", "").split(","))
+    origins = set()
+    for raw in raw_origins:
+        try:
+            parsed = urlsplit(raw.strip())
+            if parsed.scheme == "https" and parsed.netloc:
+                origins.add(f"https://{parsed.netloc}")
+            elif parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1"}:
+                origins.add(f"http://{parsed.netloc}")
+        except ValueError:
+            continue
+    return origins
 
 
 def _alert_block(watcher, admin: bool = False) -> dict:
@@ -426,8 +464,9 @@ async def a_power_refresh(request: web.Request) -> web.Response:
     try:
         async with aiohttp.ClientSession() as session:
             result = await power.run_once(session)
-    except Exception as e:
-        return web.json_response({"error": "fetch_failed", "detail": f"{type(e).__name__}: {e}"[:200]}, status=502)
+    except Exception:
+        log.exception("Помилка ручного оновлення графіка відключень")
+        return web.json_response({"error": "fetch_failed"}, status=502)
     return web.json_response({"ok": True, "changed": result["diff"] is not None, "first": result["first"],
                               "warnings": result["snapshot"]["warnings"]})
 
@@ -880,7 +919,7 @@ async def a_alert_add(request: web.Request) -> web.Response:
 
 
 def build_app(bot, watcher) -> web.Application:
-    app = web.Application(middlewares=[cors])
+    app = web.Application(middlewares=[cors], client_max_size=64 * 1024)
     app["bot"], app["watcher"] = bot, watcher
     app.router.add_get("/api/state", state)
     app.router.add_get("/api/me", me)

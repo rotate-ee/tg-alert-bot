@@ -13,6 +13,8 @@ DATA_DIR = alert_log.DATA_DIR
 NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+\.json$")
 MAX_ZIP_BYTES = 5 * 1024 * 1024
 MAX_FILE_BYTES = 5 * 1024 * 1024
+MAX_TOTAL_UNPACKED_BYTES = 20 * 1024 * 1024
+MAX_FILES = 64
 
 
 def make_zip() -> tuple[bytes, str, list[str]]:
@@ -41,6 +43,12 @@ def _parse(payload: bytes) -> dict[str, bytes]:
         infos = [i for i in z.infolist() if not i.is_dir()]
         if not infos:
             raise ValueError("empty")
+        if len(infos) > MAX_FILES:
+            raise ValueError("too_many_files")
+        if len({i.filename for i in infos}) != len(infos):
+            raise ValueError("duplicate_name")
+        if sum(i.file_size for i in infos) > MAX_TOTAL_UNPACKED_BYTES:
+            raise ValueError("too_much_data")
         for info in infos:
             if not NAME_RE.match(info.filename):  # жодних шляхів, "..", не-json
                 raise ValueError("bad_name")
